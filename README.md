@@ -1,12 +1,14 @@
 # Ethereum
 이더리움 관련 내용 
 
+# 책
+https://github.com/ethereumbook/ethereumbook
+
+---- 
 # 04keys-addresses.asciidoc
 ## 목적
 * 이더 리움에서 사용되는 몇 가지 암호화
 * 개인 키와 주소의 형태로 자금 소유권을 제어하는 사용되는 사용되는 공개 키 암호화 (PKC)
-
-
 
 
 ## 목차
