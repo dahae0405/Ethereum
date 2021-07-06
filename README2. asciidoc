@@ -1,588 +1,795 @@
-업무
-거래는 외부 소유 계정 (EOA)에서 생성되고 이더 리움 네트워크에 의해 전송되고 이더 리움 블록 체인에 기록 된 서명 된 메시지입니다. 이 기본 정의는 놀랍고 매혹적인 세부 사항을 많이 숨 깁니다. 트랜잭션을 보는 또 다른 방법은 트랜잭션이 상태 변경을 트리거하거나 계약이 EVM에서 실행되도록 할 수있는 유일한 것입니다. 이더 리움은 글로벌 싱글 톤 상태 머신이며 트랜잭션은 상태 머신을 "틱"하게 만들어 상태를 변경합니다. 계약은 자체적으로 실행되지 않습니다. 이더 리움은 자율적으로 실행되지 않습니다. 모든 것은 거래로 시작됩니다.
+[[tx_chapter]]
+== Transactions
 
-이 장에서는 트랜잭션을 분석하고 작동 방식을 보여주고 세부 사항을 검토합니다. 이 장의 대부분은 지갑 앱을 작성하고 있기 때문에 낮은 수준에서 자신의 거래를 관리하는 데 관심이있는 사람들을 대상으로합니다. 세부 사항이 흥미로울 수 있지만 기존 지갑 응용 프로그램을 사용하는 데 만족한다면 이것에 대해 걱정할 필요가 없습니다!
+((("transactions", id="ix_06transactions-asciidoc0", range="startofrange")))Transactions are signed messages originated by an externally owned account (EOA), transmitted by the Ethereum network, and recorded on the Ethereum blockchain. This basic definition conceals a lot of surprising and fascinating details. Another way to look at transactions is that they are the only things that can trigger a change of state, or cause a contract to execute in the EVM. Ethereum is a global singleton state machine, and transactions are what make that state machine "tick," changing its state. Contracts don't run on their own. Ethereum doesn't run  autonomously. Everything starts with a transaction.
 
-거래의 구조
-먼저 이더 리움 네트워크에서 직렬화되고 전송되는 트랜잭션의 기본 구조를 살펴 보겠습니다. 직렬화 된 트랜잭션을 수신하는 각 클라이언트와 응용 프로그램은 네트워크 직렬화 된 트랜잭션 자체에 존재하지 않는 메타 데이터로 장식 된 자체 내부 데이터 구조를 사용하여 메모리에 저장합니다. 네트워크 직렬화는 거래의 유일한 표준 형식입니다.
+In this chapter, we will dissect transactions, show how they work, and examine the details. Note that much of this chapter is addressed to those who are interested in managing their own transactions at a low level, perhaps because they are writing a wallet app; you don't have to worry about this if you are happy using existing wallet applications, although you may find the details interesting!
 
-트랜잭션은 다음 데이터를 포함하는 직렬화 된 이진 메시지입니다.
+[[tx_struct]]
+=== The Structure of a Transaction
 
-목하
-메시지 재생을 방지하는 데 사용되는 원래 EOA에서 발행 한 순서 번호
+((("transactions","basic structure")))First let's take a look at the basic structure of a transaction, as it is serialized and transmitted on the Ethereum network. Each client and application that receives a serialized transaction will store it in-memory using its own internal data structure, perhaps embellished with metadata that doesn't exist in the network serialized transaction itself. The network-serialization is the only standard form of a transaction.
 
-가스 가격
-발신자가 각 가스 단위에 대해 지불 할 에테르의 양 (wei)
+A transaction is a serialized binary message that contains the following data:
 
-가스 한도
-발신자가이 거래를 위해 구매할 용의가있는 최대 가스량
+Nonce:: A sequence number, issued by the originating EOA, used to prevent message replay
 
-받는 사람
-목적지 이더 리움 주소
+Gas price:: The amount of ether (in wei) that the originator is willing to pay for each unit of gas
 
-값
-목적지로 보낼 에테르의 양 (wei)
+Gas limit:: The maximum amount of gas the originator is willing to buy for this transaction
 
-데이터
-가변 길이 이진 데이터 페이로드
+Recipient:: The destination Ethereum address
 
-v, r, s
-원래 EOA의 ECDSA 디지털 서명의 세 가지 구성 요소
+Value:: The amount of ether (in wei) to send to the destination
 
-트랜잭션 메시지의 구조는 이더 리움의 단순하고 바이트 완벽한 데이터 직렬화를 위해 특별히 생성 된 RLP (Recursive Length Prefix) 인코딩 체계를 사용하여 직렬화됩니다. 이더 리움의 모든 숫자는 8 비트의 배수 인 빅 엔디안 정수로 인코딩됩니다.
+Data:: The variable-length binary data payload
 
-명확성을 위해 필드 레이블 (종료, 가스 제한 등)이 여기에 표시되지만 RLP로 인코딩 된 필드 값을 포함하는 트랜잭션 직렬화 된 데이터의 일부가 아닙니다. 일반적으로 RLP에는 필드 구분 기호 또는 레이블이 포함되지 않습니다. RLP의 길이 접두사는 각 필드의 길이를 식별하는 데 사용됩니다. 정의 된 길이를 초과하는 것은 구조의 다음 필드에 속합니다.
+v,r,s:: The three components of an ECDSA digital signature of the originating EOA
 
-이것이 전송되는 실제 트랜잭션 구조이지만 대부분의 내부 표현과 사용자 인터페이스 시각화는 트랜잭션 또는 블록 체인에서 파생 된 추가 정보로이를 장식합니다.
+((("Recursive Length Prefix (RLP)")))((("RLP (Recursive Length Prefix)")))The transaction message's structure is serialized using the Recursive Length Prefix (RLP) encoding scheme, which was created specifically for simple, byte-perfect data serialization in Ethereum. All numbers in Ethereum are encoded as big-endian integers, of lengths that are multiples of 8 bits.
 
-예를 들어 발신자 EOA를 식별하는 주소에 "보낸 사람"데이터가 없음을 알 수 있습니다. 이는 EOA의 공개 키가 ECDSA 서명의 v, r, s 구성 요소에서 파생 될 수 있기 때문입니다. 그러면 주소는 공개 키에서 파생 될 수 있습니다. 트랜잭션을 시각화하는 데 사용 된 소프트웨어에 의해 추가 된 "from"필드가 표시된 트랜잭션이 표시됩니다. 클라이언트 소프트웨어에 의해 트랜잭션에 자주 추가되는 기타 메타 데이터에는 블록 번호 (채굴되고 블록 체인에 포함 된 후) 및 트랜잭션 ID (계산 된 해시)가 포함됩니다. 다시 말하지만이 데이터는 트랜잭션에서 파생되며 트랜잭션 메시지 자체의 일부를 형성하지 않습니다.
+Note that the field labels (+to+, +gas limit+, etc.) are shown here for clarity, but are not part of the transaction serialized data, which contains the field values RLP-encoded. In general, RLP does not contain any field delimiters or labels. RLP's length prefix is used to identify the length of each field. Anything beyond the defined length belongs to the next field in the structure.
 
-트랜잭션 임시 값
-nonce는 트랜잭션에서 가장 중요하고 이해하기 어려운 구성 요소 중 하나입니다. Yellow Paper ( [references] 참조 ) 의 정의는 다음 과 같습니다.
+While this is the actual transaction structure transmitted, most internal representations and user interface visualizations embellish this with additional information, derived from the transaction or from the blockchain.
 
-nonce :이 주소에서 보낸 트랜잭션 수와 동일한 스칼라 값 또는 연결된 코드가있는 계정의 경우이 계정에서 만든 계약 생성 수입니다.
+For example, you may notice there is no &#x201c;from&#x201d; data in the address identifying the originator EOA. That is because the EOA's public key can be derived from the +v,r,s+ components of the ECDSA signature. The address can, in turn, be derived from the public key. When you see a transaction showing a "from" field, that was added by the software used to visualize the transaction. Other metadata frequently added to the transaction by client software includes the block number (once it is mined and included in the blockchain) and a transaction ID (calculated hash). Again, this data is derived from the transaction, and does not form part of the transaction message itself.
 
-엄밀히 말하면 nonce는 원래 주소의 속성입니다. 즉, 보내는 주소의 컨텍스트에서만 의미가 있습니다. 그러나 nonce는 블록 체인에서 계정 상태의 일부로 명시 적으로 저장되지 않습니다. 대신 주소에서 시작된 확인 된 트랜잭션의 수를 계산하여 동적으로 계산됩니다.
+[[tx_nonce]]
+=== The Transaction Nonce
 
-트랜잭션 카운팅 임시 값의 존재가 중요한 두 가지 시나리오가 있습니다. 트랜잭션 생성 순서에 포함되는 트랜잭션의 유용성 기능과 트랜잭션 복제 보호의 필수 기능입니다. 각각에 대한 예제 시나리오를 살펴 보겠습니다.
+((("nonces", id="ix_06transactions-asciidoc1", range="startofrange")))((("transactions","nonces", id="ix_06transactions-asciidoc2", range="startofrange")))The nonce is one of the most important and least understood components of a transaction. The definition in the Yellow Paper (see <<references>>) reads:
 
-두 개의 거래를하고 싶다고 상상해보십시오. 당신은 6 이더의 중요한 지불과 8 이더의 또 다른 지불이 있습니다. 6- 이더 트랜잭션이 더 중요하기 때문에 먼저 서명하고 브로드 캐스트 한 다음 두 번째 8- 이더 트랜잭션에 서명하고 브로드 캐스트합니다. 안타깝게도 계정에 10 개의 이더 만 포함되어 있다는 사실을 간과 했으므로 네트워크는 두 거래를 모두 수락 할 수 없습니다. 둘 중 하나가 실패합니다. 더 중요한 6- 이더를 먼저 보냈기 때문에 당연히 하나는 통과하고 8- 이더는 거부 될 것으로 예상합니다. 그러나 이더 리움과 같은 탈 중앙화 시스템에서 노드는 어느 순서로든 거래를받을 수 있습니다. 특정 노드가 하나의 트랜잭션이 다른 노드보다 먼저 전파된다는 보장은 없습니다. 따라서 일부 노드는 먼저 6- 이더 트랜잭션을 수신하고 다른 노드는 8- 이더 트랜잭션을 먼저 수신하는 경우가 거의 확실합니다. nonce가 없으면 어떤 것이 수락되고 어떤 것이 거부되는지 무작위로 결정됩니다. 그러나 nonce가 포함 된 경우 보낸 첫 번째 트랜잭션에는 3 개의 nonce가있는 반면 8-ether 트랜잭션에는 다음 nonce 값 (즉, 4)이 있습니다. 따라서 해당 트랜잭션은 먼저 수신 된 경우에도 0에서 3까지의 nonce가있는 트랜잭션이 처리 될 때까지 무시됩니다. 휴! 4). 따라서 해당 트랜잭션은 먼저 수신 된 경우에도 0에서 3까지의 nonce가있는 트랜잭션이 처리 될 때까지 무시됩니다. 휴! 4). 따라서 해당 트랜잭션은 먼저 수신 된 경우에도 0에서 3까지의 nonce가있는 트랜잭션이 처리 될 때까지 무시됩니다. 휴!
+____
++nonce+: A scalar value equal to the number of transactions sent from this address or, in the case of accounts with associated code, the number of contract-creations made by this account.
+____
 
-이제 100 에테르를 가진 계정이 있다고 상상해보십시오. 환상적입니다! 당신이 정말로 사고 싶은 mcguffin-widget에 대해 이더로 지불을 수락 할 온라인 누군가를 찾습니다. 당신은 그들에게 2 에테르를 보내고 그들은 당신에게 mcguffin-widget을 보냅니다. 아름다운. 2-ether 지불을하기 위해, 당신은 당신의 계정에서 그들의 계정으로 2 개의 이더를 보내는 거래에 서명 한 다음,이를 확인하고 블록 체인에 포함시키기 위해 Ethereum 네트워크에 브로드 캐스트합니다. 이제 트랜잭션에 nonce 값이 없으면 두 번째로 동일한 주소로 2 이더를 보내는 두 번째 트랜잭션은 첫 번째 트랜잭션과 정확히 동일하게 보입니다. 즉, Ethereum 네트워크에서 거래를 보는 사람 (수신자 또는 적을 포함한 모든 사람)이 "재생"할 수 있습니다. 원래 트랜잭션을 복사하여 붙여넣고 네트워크에 다시 전송하면 모든 이더가 사라질 때까지 트랜잭션이 계속 반복됩니다. 그러나 트랜잭션 데이터에 포함 된 nonce 값으로동일한 양의 이더를 동일한 수신자 주소로 여러 번 보내는 경우에도 모든 단일 트랜잭션은 고유 합니다. 따라서 증분 임시 값을 거래의 일부로 사용하면 누구도 귀하가 지불 한 금액을 "복제"할 수 없습니다.
+Strictly speaking, the nonce is an attribute of the originating address; that is, it only has meaning in the context of the sending address. However, the nonce is not stored explicitly as part of an account's state on the blockchain. Instead, it is calculated dynamically, by counting the number of confirmed transactions that have originated from an address.
 
-요약하면, 비트 코인 프로토콜의 "UTXO (Unspent Transaction Output)"메커니즘과 달리 nonce의 사용은 계정 기반 프로토콜에 실제로 중요하다는 점에 유의하는 것이 중요 합니다.
+There are two scenarios where the existence of a transaction-counting nonce is important: the usability feature of transactions being included in the order of creation, and the vital feature of transaction duplication protection. Let's look at an example scenario for each of these:
 
-Nonces 추적
-실제적으로 nonce는 계정에서 발생한 확인 된 (즉, 온 체인) 트랜잭션 수의 최신 카운트입니다 . nonce가 무엇인지 알아 내려면, 예를 들어 web3 인터페이스를 통해 블록 체인을 조사 할 수 있습니다. Ropsten 테스트 넷의 Geth (또는 선호하는 web3 인터페이스)에서 JavaScript 콘솔을 열고 다음을 입력합니다.
+1. Imagine you wish to make two transactions. You have an important payment to make of 6 ether, and also another payment of 8 ether. You sign and broadcast the 6-ether transaction first, because it is the more important one, and then you sign and broadcast the second, 8-ether transaction. Sadly, you have overlooked the fact that your account contains only 10 ether, so the network can't accept both transactions: one of them will fail. Because you sent the more important 6-ether one first, you understandably expect that one to go through and the 8-ether one to be rejected. However, in a decentralized system like Ethereum, nodes may receive the transactions in either order; there is no guarantee that a particular node will have one transaction propagated to it before the other. As such, it will almost certainly be the case that some nodes receive the 6-ether transaction first and others receive the 8-ether transaction first. Without the nonce, it would be random as to which one gets accepted and which rejected. However, with the nonce included, the first transaction you sent will have a nonce of, let's say, 3, while the 8-ether transaction has the next nonce value (i.e., 4). So, that transaction will be ignored until the transactions with nonces from 0 to 3 have been processed, even if it is received first. Phew!
 
-> web3.eth.getTransactionCount ( "0x9e713963a92c02317a681b9bb3065a8249de124f")
+
+2. Now imagine you have an account with 100 ether. Fantastic! You find someone online who will accept payment in ether for a mcguffin-widget that you really want to buy. You send them 2 ether and they send you the mcguffin-widget. Lovely. To make that 2-ether payment, you signed a transaction sending 2 ether from your account to their account, and then broadcast it to the Ethereum network to be verified and included on the blockchain. Now, without a nonce value in the transaction, a second transaction sending 2 ether to the same address a second time will look exactly the same as the first transaction. This means that anyone who sees your transaction on the Ethereum network (which means everyone, including the recipient or your enemies) can "replay" the transaction again and again and again until all your ether is gone simply by copying and pasting your original transaction and resending it to the network. However, with the nonce value included in the transaction data, _every single transaction is unique_, even when sending the same amount of ether to the same recipient address multiple times. Thus, by having the incrementing nonce as part of the transaction, it is simply not possible for anyone to "duplicate" a payment you have made.
+
+In summary, it is important to note that the use of the nonce is actually vital for an _account-based_ protocol, in contrast to the &#x201c;Unspent Transaction Output&#x201d; (UTXO) mechanism of the Bitcoin protocol.
+
+[[tracking_nonce]]
+==== Keeping Track of Nonces
+
+((("nonces","keeping track of")))In practical terms, the nonce is an up-to-date count of the number of _confirmed_ (i.e., on-chain) transactions that have originated from an account. To find out what the nonce is, you can interrogate the blockchain, for example via the web3 interface. Open a JavaScript console in Geth (or your preferred web3 interface) on Ropsten testnet, then type:
+
+++++
+<pre data-type="programlisting">
+&gt; <strong>web3.eth.getTransactionCount("0x9e713963a92c02317a681b9bb3065a8249de124f")</strong>
 40
-팁
-nonce는 0부터 시작하는 카운터입니다. 즉, 첫 번째 트랜잭션에는 nonce 0이 있습니다.이 예에서는 트랜잭션 개수가 40이고 이는 nonce 0부터 39까지 표시되었음을 의미합니다. 다음 트랜잭션의 임시 값은 40이어야합니다.
+</pre>
+++++
 
-지갑은 관리하는 각 주소에 대한 nonce를 추적합니다. 단일 지점에서만 트랜잭션을 시작하는 한 그렇게하는 것은 매우 간단합니다. 자신의 지갑 소프트웨어 또는 트랜잭션을 발생시키는 다른 응용 프로그램을 작성한다고 가정 해 보겠습니다. 논스를 어떻게 추적합니까?
+[TIP]
+====
+The nonce is a zero-based counter, meaning the first transaction has nonce 0. In this example, we have a transaction count of 40, meaning nonces 0 through 39 have been seen. The next transaction's nonce will need to be 40.
+====
 
-새 트랜잭션을 생성 할 때 시퀀스에서 다음 nonce를 할당합니다. 그러나 확인 될 때까지 getTransactionCount합계에 포함 되지 않습니다 .
+Your wallet will keep track of nonces for each address it manages. It's fairly simple to do that, as long as you are only originating transactions from a single point. Let's say you are writing your own wallet software or some other application that originates transactions. How do you track nonces?
 
-경고
-getTransactionCount몇 개의 트랜잭션을 연속으로 전송하면 몇 가지 문제가 발생할 수 있으므로 보류중인 트랜잭션을 계산 하는 기능을 사용할 때주의하십시오 .
+When you create a new transaction, you assign the next nonce in the sequence. But until it is confirmed, it will not count toward the pass:[<span class="keep-together"><code>getTransactionCount</code></span>] total.
 
-예를 살펴 보겠습니다.
+[[get_tx_count_bug]]
+[WARNING]
+====
+Be careful when using the pass:[<span class="keep-together"><code>getTransactionCount</code></span>] function for counting pending transactions, because you might run into some problems if you send a few transactions in a row.
+====
 
-> web3.eth.getTransactionCount ( "0x9e713963a92c02317a681b9bb3065a8249de124f", \
-"보류 중")
+Let's look at an example:
+
+++++
+<pre data-type="programlisting">
+&gt; <strong>web3.eth.getTransactionCount("0x9e713963a92c02317a681b9bb3065a8249de124f", \
+"pending")</strong>
 40
-> web3.eth.sendTransaction ({from : web3.eth.accounts [0],받는 사람 : \
-"0xB0920c523d582040f2BCB1bD7FB1c7C1ECEbdB34", 값 : web3.utils.toWei (0.01, "ether")}); 
-> web3.eth.getTransactionCount ( "0x9e713963a92c02317a681b9bb3065a8249de124f", \
-"보류 중")
+&gt; <strong>web3.eth.sendTransaction({from: web3.eth.accounts[0], to: \
+"0xB0920c523d582040f2BCB1bD7FB1c7C1ECEbdB34", value: web3.utils.toWei(0.01, "ether")});</strong>
+&gt; <strong>web3.eth.getTransactionCount("0x9e713963a92c02317a681b9bb3065a8249de124f", \
+"pending")</strong>
 41
-> web3.eth.sendTransaction ({from : web3.eth.accounts [0],받는 사람 : \
-"0xB0920c523d582040f2BCB1bD7FB1c7C1ECEbdB34", 값 : web3.utils.toWei (0.01, "ether")}); 
-> web3.eth.getTransactionCount ( "0x9e713963a92c02317a681b9bb3065a8249de124f", \
-"보류 중")
+&gt; <strong>web3.eth.sendTransaction({from: web3.eth.accounts[0], to: \
+"0xB0920c523d582040f2BCB1bD7FB1c7C1ECEbdB34", value: web3.utils.toWei(0.01, "ether")});</strong>
+&gt; <strong>web3.eth.getTransactionCount("0x9e713963a92c02317a681b9bb3065a8249de124f", \
+"pending")</strong>
 41
-> web3.eth.sendTransaction ({from : web3.eth.accounts [0],받는 사람 : \
-"0xB0920c523d582040f2BCB1bD7FB1c7C1ECEbdB34", 값 : web3.utils.toWei (0.01, "ether")}); 
-> web3.eth.getTransactionCount ( "0x9e713963a92c02317a681b9bb3065a8249de124f", \
-"보류 중")
+&gt; <strong>web3.eth.sendTransaction({from: web3.eth.accounts[0], to: \
+"0xB0920c523d582040f2BCB1bD7FB1c7C1ECEbdB34", value: web3.utils.toWei(0.01, "ether")});</strong>
+&gt; <strong>web3.eth.getTransactionCount("0x9e713963a92c02317a681b9bb3065a8249de124f", \
+"pending")</strong>
 41
-팁
-Geth의 자바 스크립트 콘솔에서 이러한 코드 예제를 직접 재현하려는 경우 web3.utils.toWei () 대신 web3.toWei ()를 사용해야합니다. 이는 Geth가 이전 버전의 web3 라이브러리를 사용하기 때문입니다.
+</pre>
+++++
+[TIP]
+====
+If you're trying to recreate these code examples yourself in Geth's javascript console, you should use web3.toWei() instead of web3.utils.toWei(). This is because Geth uses an older version of the web3 library.
+====
 
-보시다시피, 우리가 보낸 첫 번째 트랜잭션은 트랜잭션 수를 41 개로 증가시켜 보류중인 트랜잭션을 보여줍니다. 그러나 우리가 세 번의 트랜잭션을 빠르게 연속해서 보냈을 때 getTransactionCount호출은이를 계산하지 않았습니다. mempool에 3 개가 보류 될 것으로 예상 할 수 있지만 1 개만 계산되었습니다. 네트워크 통신이 안정 될 때까지 몇 초 동안 기다리면 getTransactionCount호출이 예상 번호를 반환합니다. 그러나 그 동안에는 둘 이상의 거래가 보류 중이지만 도움이되지 않을 수 있습니다.
+As you can see, the first transaction we sent increased the transaction count to 41, showing the pending transaction. But when we sent three more transactions in quick succession, the pass:[<span class="keep-together"><code>getTransactionCount</code></span>] call didn't count them. It only counted one, even though you might expect there to be three pending in the mempool. If we wait a few seconds to allow for network communications to settle down, the pass:[<span class="keep-together"><code>getTransactionCount</code></span>] call will return the expected number. But in the interim, while there is more than one transaction pending, it might not help us.
 
-트랜잭션을 구성하는 애플리케이션을 빌드 할 때 getTransactionCount보류중인 트랜잭션 에 의존 할 수 없습니다 . 보류중인 카운트와 확인 된 카운트가 같을 때만 (모든 미결 거래가 확인 됨) getTransactionCountnonce 카운터를 시작하기 위해 의 출력을 신뢰할 수 있습니다 . 그 후, 각 트랜잭션이 확인 될 때까지 애플리케이션에서 임시 값을 추적하십시오.
+When you build an application that constructs transactions, it cannot rely on pass:[<span class="keep-together"><code>getTransactionCount</code></span>] for pending transactions. Only when the pending and confirmed counts are equal (all outstanding transactions are confirmed) can you trust the output of pass:[<span class="keep-together"><code>getTransactionCount</code></span>] to start your nonce counter. Thereafter, keep track of the nonce in your application until each transaction confirms.
 
-Parity의 JSON RPC 인터페이스는 parity_nextNonce트랜잭션에서 사용해야하는 다음 nonce를 반환하는 함수를 제공합니다 . 이 parity_nextNonce함수는 확인하지 않고 여러 트랜잭션을 연속적으로 빠르게 구성하더라도 nonce를 올바르게 계산합니다.
+((("Parity","nonce counting")))Parity's JSON RPC interface offers the pass:[<span class="keep-together"><code>parity_nextNonce</code></span>] function, which returns the next nonce that should be used in a transaction. The pass:[<span class="keep-together"><code>parity_nextNonce</code></span>] function counts nonces correctly, even if you construct several transactions in rapid succession without confirming them:
 
-$ curl --data '{ "method": "parity_nextNonce", \
-  "params": [ "0x9e713963a92c02317a681b9bb3065a8249de124f"], \
-  "id": 1, "jsonrpc": "2.0"} '-H "Content-Type : application / json"-X POST \
-  localhost : 8545
+++++
+<pre data-type="programlisting">
+$ <strong>curl --data '{"method":"parity_nextNonce", \
+  "params":["0x9e713963a92c02317a681b9bb3065a8249de124f"],\
+  "id":1,"jsonrpc":"2.0"}' -H "Content-Type: application/json" -X POST \
+  localhost:8545</strong>
 
-{ "jsonrpc": "2.0", "result": "0x32", "id": 1}
-팁
-Parity에는 JSON RPC 인터페이스에 액세스하기위한 웹 콘솔이 있지만 여기서는 명령 줄 HTTP 클라이언트를 사용하여 액세스합니다.
+{"jsonrpc":"2.0","result":"0x32","id":1}
+</pre>
+++++
 
-Nonce, 중복 Nonce 및 확인의 간격
-프로그래밍 방식으로 트랜잭션을 생성하는 경우, 특히 여러 독립 프로세스에서 동시에 생성하는 경우 nonce를 추적하는 것이 중요합니다 .
+[[parity_curl]]
+[TIP]
+====
+Parity has a web console for accessing the JSON RPC interface, but here we are using a command-line HTTP client to access it.
+====
 
-이더 리움 네트워크는 nonce를 기반으로 트랜잭션을 순차적으로 처리합니다. 즉, nonce 0으로 트랜잭션을 전송 한 다음 nonce 2로 트랜잭션을 전송하면 두 번째 트랜잭션은 어떤 블록에도 포함되지 않습니다. 이더 리움 네트워크는 누락 된 nonce가 나타날 때까지 기다리는 동안 mempool에 저장됩니다. 모든 노드는 누락 된 임시 값이 단순히 지연되었으며 임시 값 2가있는 트랜잭션이 순서를 벗어나 수신되었다고 가정합니다.
+[[gaps_nonce]]
+==== Gaps in Nonces, Duplicate Nonces, and Confirmation
 
-그런 다음 누락 된 nonce 1이있는 트랜잭션을 전송하면 두 트랜잭션 (nonces 1 및 2)이 처리되고 포함됩니다 (물론 유효한 경우). 갭을 채우면 네트워크는 mempool에 보유한 순서를 벗어난 트랜잭션을 채굴 할 수 있습니다.
+((("nonces","gaps in sequence of")))It is important to keep track of nonces if you are creating transactions programmatically, especially if you are doing so from multiple independent processes pass:[<span class="keep-together">simultaneously</span>].
 
-이것이 의미하는 바는 여러 트랜잭션을 순차적으로 생성하고 그중 하나가 공식적으로 어떤 블록에도 포함되지 않으면 모든 후속 트랜잭션이 "고착"되어 누락 된 임시 값을 기다린다는 것입니다. 트랜잭션은 유효하지 않거나 가스가 충분하지 않기 때문에 임시 시퀀스에 부주의 한 "갭"을 만들 수 있습니다. 물건을 다시 움직이려면 누락 된 임시 값이있는 유효한 트랜잭션을 전송해야합니다. "누락 된"nonce가있는 트랜잭션이 네트워크에 의해 확인되면 이후의 nonce가있는 모든 브로드 캐스트 트랜잭션이 점진적으로 유효 해집니다. 거래를 "회상"하는 것은 불가능합니다!
+The Ethereum network processes transactions sequentially, based on the nonce. That means that if you transmit a transaction with nonce 0 and then transmit a transaction with nonce 2, the second transaction will not be included in any blocks. It will be stored in the mempool, while the Ethereum network waits for the missing nonce to appear. All nodes will assume that the missing nonce has simply been delayed and that the transaction with nonce 2 was received out of sequence.
 
-반면에, 예를 들어 동일한 nonce를 사용하지만 수신자 또는 값이 다른 두 트랜잭션을 전송하여 실수로 nonce를 복제 한 경우 그중 하나가 확인되고 하나는 거부됩니다. 어느 것이 확인되는지는 그것들을 수신하는 첫 번째 검증 노드에 도착하는 순서에 의해 결정됩니다. 즉, 상당히 무작위 적입니다.
+If you then transmit a transaction with the missing nonce 1, both transactions (nonces 1 and 2) will be processed and included (if valid, of course). Once you fill the gap, the network can mine the out-of-sequence transaction that it held in the mempool.
 
-보시다시피 nonce를 추적하는 것이 필요하며 응용 프로그램이 해당 프로세스를 올바르게 관리하지 않으면 문제가 발생합니다. 안타깝게도 다음 섹션에서 볼 수 있듯이이 작업을 동시에 수행하면 상황이 더욱 어려워집니다.
+What this means is that if you create several transactions in sequence and one of them does not get officially included in any blocks, all the subsequent transactions will be "stuck," waiting for the missing nonce. A transaction can create an inadvertent "gap" in the nonce sequence because it is invalid or has insufficient gas. To get things moving again, you have to transmit a valid transaction with the missing nonce. You should be equally mindful that once a transaction with the "missing" nonce is validated by the network, all the broadcast transactions with subsequent nonces will incrementally become valid; it is not possible to "recall" a transaction!
 
-동시성, 트랜잭션 발생 및 Nonces
-동시성은 컴퓨터 과학의 복잡한 측면이며, 특히 Ethereum 과 같은 분산 및 분산 실시간 시스템에서 예기치 않게 발생하는 경우가 있습니다.
+((("nonces","confirmation")))((("nonces","duplicated")))If, on the other hand, you accidentally duplicate a nonce, for example by transmitting two transactions with the same nonce but different recipients or values, then one of them will be confirmed and one will be rejected. Which one is confirmed will be determined by the sequence in which they arrive at the first validating node that receives them&#x2014;i.e., it will be fairly random.
 
-간단히 말해서 동시성은 여러 독립 시스템에서 동시에 계산하는 경우입니다. 이들은 같은 프로그램 (예 : 멀티 스레딩), 같은 CPU (예 : 멀티 프로세싱) 또는 다른 컴퓨터 (예 : 분산 시스템 )에있을 수 있습니다. 이더 리움은 정의에 따라 작업 (노드, 클라이언트, DApp)의 동시성을 허용하지만 합의를 통해 단일 상태를 적용하는 시스템입니다.
+As you can see, keeping track of nonces is necessary, and if your application doesn't manage that process correctly you will run into problems. Unfortunately, things get even more difficult if you are trying to do this concurrently, as we will see in the next section.
 
-이제 동일한 주소에서 트랜잭션을 생성하는 여러 독립 지갑 애플리케이션이 있다고 가정 해보십시오. 이러한 상황의 한 가지 예는 거래소의 핫 지갑 (키가 온라인이 아닌 콜드 지갑과 달리 온라인에 키가 저장된 지갑)에서 인출을 처리하는 거래소입니다. 이상적으로는 인출을 처리하는 컴퓨터가 한 대 이상이어서 병목 현상이나 단일 실패 지점이되지 않도록하는 것이 좋습니다. 그러나 인출을 생성하는 두 대 이상의 컴퓨터가 있으면 문제가 될 수 있습니다. 특히 논스를 선택하는 문제가 있습니다. 동일한 핫 월렛 계정에서 여러 대의 컴퓨터가 트랜잭션을 생성, 서명 및 브로드 캐스팅하는 방법은 무엇입니까?
+[[concurrency]]
+==== Concurrency, Transaction Origination, and Nonces
 
-단일 컴퓨터를 사용하여 트랜잭션을 서명하는 컴퓨터에 선착순으로 nonce를 할당 할 수 있습니다. 그러나이 컴퓨터는 이제 단일 실패 지점입니다. 더 나쁜 것은 여러 개의 nonce가 할당되고 그중 하나가 사용되지 않는 경우 (해당 nonce로 트랜잭션을 처리하는 컴퓨터에서 오류로 인해) 모든 후속 트랜잭션이 중단됩니다.
+((("concurrency, nonces and")))((("nonces","concurrency")))((("nonces","transaction origination")))Concurrency is a complex aspect of computer science, and it crops up unexpectedly sometimes, especially in decentralized and distributed real-time systems like pass:[<span class="keep-together">Ethereum</span>].
 
-또 다른 접근 방식은 트랜잭션을 생성하지만 트랜잭션에 nonce를 할당하지 않는 것입니다 (따라서 서명되지 않은 상태로 둡니다. nonce는 트랜잭션 데이터의 필수 부분이므로 트랜잭션을 인증하는 디지털 서명에 포함되어야 함을 기억하십시오). . 그런 다음 서명하고 nonce를 추적하는 단일 노드에 큐를 지정할 수 있습니다. 다시 말하지만 이것은 프로세스의 초크 포인트가 될 것입니다. nonce의 서명 및 추적은 부하로 인해 혼잡해질 가능성이있는 작업의 일부인 반면 서명되지 않은 트랜잭션의 생성은 실제로 수행하지 않는 부분입니다. 병렬화해야합니다. 일부 동시성은 있지만 프로세스의 중요한 부분에서 부족합니다.
+In simple terms, concurrency is when you have simultaneous computation by multiple independent systems. These can be in the same program (e.g., multithreading), on the same CPU (e.g., multiprocessing), or on different computers (i.e., distributed pass:[<span class="keep-together">systems</span>]). Ethereum, by definition, is a system that allows concurrency of operations (nodes, clients, DApps) but enforces a singleton state through consensus.
 
-결국, 이러한 동시성 문제는 독립적 인 프로세스에서 계정 잔액 및 트랜잭션 확인을 추적하는 어려움 외에도 대부분의 구현에서 동시성을 피하고 단일 프로세스가 거래소에서 모든 인출 트랜잭션을 처리하거나 여러 개의 인출을 위해 완전히 독립적으로 작동 할 수 있으며 간헐적으로 재조정 만하면되는 핫 지갑.
+Now, imagine that you have multiple independent wallet applications that are generating transactions from the same address or addresses. One example of such a situation would be an exchange processing withdrawals from the exchange's hot wallet (a wallet whose keys are stored online, in contrast to a cold wallet where the keys are never online). Ideally, you'd want to have more than one computer processing withdrawals, so that it doesn't become a bottleneck or single point of failure. However, this quickly becomes problematic, as having more than one computer producing withdrawals will result in some thorny concurrency problems, not least of which is the selection of nonces. How do multiple computers generating, signing, and broadcasting transactions from the same hot wallet account coordinate?
 
-거래 가스
-우리는 이전 장에서 가스에 대해 약간 이야기했고 [gas] 에서 더 자세히 논의했습니다 . 그러나 트랜잭션의 gasPrice 및 gasLimit 구성 요소의 역할에 대한 몇 가지 기본 사항을 다루겠습니다.
+You could use a single computer to assign nonces, on a first-come first-served basis, to computers signing transactions. However, this computer is now a single point of failure. Worse, if several nonces are assigned and one of them never gets used (because of a failure in the computer processing the transaction with that nonce), all subsequent transactions get stuck.
 
-가스는 이더 리움의 연료입니다. 가스는 이더가 아닙니다. 이더에 대한 자체 환율을 가진 별도의 가상 화폐입니다. Ethereum은 가스를 사용하여 트랜잭션이 사용할 수있는 리소스의 양을 제어합니다. 전 세계 수천 대의 컴퓨터에서 처리되기 때문입니다. 개방형 (튜링 완료) 계산 모델에는 서비스 거부 공격이나 실수로 리소스를 많이 소모하는 트랜잭션을 방지하기 위해 어떤 형태의 측정이 필요합니다.
+Another approach would be to generate the transactions, but not assign a nonce to them (and therefore leave them unsigned&#x2014;remember that the nonce is an integral part of the transaction data and therefore needs to be included in the digital signature that authenticates the transaction). You could then queue them to a single node that signs them and also keeps track of nonces. Again, though, this would be a choke point in the process: the signing and tracking of nonces is the part of your operation that is likely to become congested under load, whereas the generation of the unsigned transaction is the part you don't really need to parallelize. You would have some concurrency, but it would be lacking in a critical part of the process.
 
-가스는 에테르 가치의 급격한 변화와 함께 발생할 수있는 변동성으로부터 시스템을 보호하고 가스가 지불하는 다양한 자원 비용 사이의 중요하고 민감한 비율을 관리하는 방법으로 에테르와 분리됩니다. (즉, 계산, 메모리 및 저장).
+In the end, these concurrency problems, on top of the difficulty of tracking account balances and transaction confirmations in independent processes, force most implementations toward avoiding concurrency and creating bottlenecks such as a single process handling all withdrawal transactions in an exchange, or setting up multiple hot wallets that can work completely independently for withdrawals and only need to be intermittently rebalanced.(((range="endofrange", startref="ix_06transactions-asciidoc2")))(((range="endofrange", startref="ix_06transactions-asciidoc1")))
 
-거래의 gasPrice 필드를 사용하면 거래 발신자가 가스 대가로 지불 할 가격을 설정할 수 있습니다. 가격은 가스 단위당 wei 단위로 측정됩니다. 예를 들어, [intro_chapter] 의 샘플 거래에서 지갑은 gasPrice를 3gwei (3 기가 웨이 또는 30 억 wei)로 설정했습니다.
+[[tx_gas]]
+=== Transaction Gas
 
-팁
-인기있는 사이트 ETH Gas Station 은 이더 리움 메인 네트워크의 현재 가스 가격 및 기타 관련 가스 메트릭에 대한 정보를 제공합니다.
+((("gas","transactions and", id="ix_06transactions-asciidoc3", range="startofrange")))((("transactions","gas", id="ix_06transactions-asciidoc4", range="startofrange")))We talked about gas a little in earlier chapters, and we discuss it in more detail in <<gas>>. However, let's cover some basics about the role of the +gasPrice+ and +gasLimit+ components of a transaction.
 
-지갑은 거래를 더 빠르게 확인하기 위해 발생한 거래의 gasPrice를 조정할 수 있습니다. gasPrice가 높을수록 거래가 더 빨리 확인 될 가능성이 높습니다. 반대로 우선 순위가 낮은 거래는 가격이 낮아져 확인 속도가 느려질 수 있습니다. gasPrice가 설정할 수있는 최소값은 0으로 수수료가없는 거래를 의미합니다. 블록 공간에 대한 수요가 적은 기간 동안 이러한 거래는 매우 잘 채굴 될 수 있습니다.
+Gas is the fuel of Ethereum. Gas is not ether&#x2014;it's a separate virtual currency with its own exchange rate against ether. Ethereum uses gas to control the amount of resources that a transaction can use, since it will be processed on thousands of computers around the world. The open-ended (Turing-complete) computation model requires some form of metering in order to avoid denial-of-service attacks or inadvertently resource-devouring transactions.
 
-노트
-허용되는 최소 gasPrice는 0입니다. 이는 지갑이 완전히 무료 거래를 생성 할 수 있음을 의미합니다. 용량에 따라 확인되지 않을 수 있지만 무료 거래를 금지하는 프로토콜은 없습니다. 이더 리움 블록 체인에 성공적으로 포함 된 이러한 거래의 몇 가지 예를 찾을 수 있습니다.
+Gas is separate from ether in order to protect the system from the volatility that might arise along with rapid changes in the value of ether, and also as a way to manage the important and sensitive ratios between the costs of the various resources that gas pays for (namely, computation, memory, and storage).
 
-web3 인터페이스는 여러 블록에 걸쳐 중간 가격을 계산하여 gasPrice 제안을 제공합니다 (트러플 콘솔 또는 JavaScript web3 콘솔을 사용하여 수행 할 수 있음).
+((("gasPrice field")))The +gasPrice+ field in a transaction allows the transaction originator to set the price they are willing to pay in exchange for gas. The price is measured in wei per gas unit. For example, in the sample transaction in <<intro_chapter>> your wallet set the +gasPrice+ to 3 gwei (3 gigawei or 3 billion wei).
 
-> web3.eth.getGasPrice (console.log)
-> null BigNumber {s : 1, e : 10, c : [10000000000]}
-가스와 관련된 두 번째 중요한 필드는 gasLimit입니다. 간단히 말해서, gasLimit은 거래 개시자가 거래를 완료하기 위해 기꺼이 구매할 최대 가스 단위 수를 제공합니다. 한 EOA에서 다른 EOA로 이더를 전송하는 간단한 결제의 경우 필요한 가스량은 21,000 가스 단위로 고정됩니다. 이더의 비용을 계산하려면 지불 할 가스 가격에 21,000을 곱합니다. 예를 들면 :
+[TIP]
+====
+The popular site https://ethgasstation.info/[ETH Gas Station] provides information on the current prices of gas and other relevant gas metrics for the Ethereum main network.
+====
 
-> web3.eth.getGasPrice (function (err, res) {console.log (res * 21000)})
+Wallets can adjust the +gasPrice+ in transactions they originate to achieve faster confirmation of transactions. The higher the +gasPrice+, the faster the transaction is likely to be confirmed. Conversely, lower-priority transactions can carry a reduced price, resulting in slower confirmation. The minimum value that +gasPrice+ can be set to is zero, which means a fee-free transaction. During periods of low demand for space in a block, such transactions might very well get mined.
+
+[NOTE]
+====
+The minimum acceptable +gasPrice+ is zero. That means that wallets can generate completely free transactions. Depending on capacity, these may never be confirmed, but there is nothing in the protocol that prohibits free transactions. You can find several examples of such transactions successfully included on the Ethereum blockchain.
+====
+
+[[gas_price_suggestion]]
+The web3 interface offers a +gasPrice+ suggestion, by calculating a median price across several blocks (we can use the truffle console or any JavaScript web3 console to do that):
+
+++++
+<pre data-type="programlisting">
+> <strong>web3.eth.getGasPrice(console.log)</strong>
+> null BigNumber { s: 1, e: 10, c: [ 10000000000 ] }
+</pre>
+++++
+
+[[calc_gas_price]]
+((("gasLimit field")))The second important field related to gas is +gasLimit+. In simple terms, +gasLimit+ gives the maximum number of units of gas the transaction originator is willing to buy in order to complete the transaction. For simple payments, meaning transactions that transfer ether from one EOA to another EOA, the gas amount needed is fixed at 21,000 gas units. To calculate how much ether that will cost, you multiply 21,000 by the +gasPrice+ you're willing to pay. For example:
+
+++++
+<pre data-type="programlisting">
+> <strong>web3.eth.getGasPrice(function(err, res) {console.log(res*21000)} )</strong>
 > 210000000000000
-거래의 목적지 주소가 계약 인 경우 필요한 가스량을 추정 할 수 있지만 정확하게 결정할 수는 없습니다. 계약은 총 가스 비용이 다른 다른 실행 경로로 이어지는 다양한 조건을 평가할 수 있기 때문입니다. 계약은 사용자가 통제 할 수없고 예측할 수없는 조건에 따라 단순한 계산 만 실행하거나 더 복잡한 계산을 실행할 수 있습니다. 이를 설명하기 위해 예를 살펴 보겠습니다. 호출 될 때마다 카운터를 증가시키고 호출 횟수와 동일한 횟수만큼 특정 루프를 실행하는 스마트 계약을 작성할 수 있습니다. 아마도 100 번째 콜에서 복권과 같은 특별한 상을 주지만 상금을 계산하려면 추가 계산이 필요합니다. 계약서에 99 번 전화하면 한 가지 일이 생기면 하지만 100 번째 콜에서 매우 다른 일이 발생합니다. 지불 할 가스의 양은 트랜잭션이 블록에 포함되기 전에 해당 함수를 호출 한 다른 트랜잭션의 수에 따라 다릅니다. 아마도 귀하의 추정치는 99 번째 거래를 기반으로하지만 귀하의 거래가 확인되기 직전에 다른 사람이 99 번째 계약을 호출합니다. 이제 당신은 호출 할 100 번째 트랜잭션이고 계산 노력 (및 가스 비용)이 훨씬 더 높습니다.
+</pre>
+++++
 
-Ethereum에서 사용되는 일반적인 비유를 빌리려면 gasLimit을 자동차의 연료 탱크 용량으로 생각할 수 있습니다 (자동차가 거래입니다). 여정에 필요한만큼의 가스를 탱크에 채 웁니다 (트랜잭션 검증에 필요한 계산). 양을 어느 정도 추정 할 수 있지만 연료 소비를 증가시키는 전환 (더 복잡한 실행 경로)과 같이 여정에 예기치 않은 변화가있을 수 있습니다.
+If your transaction's destination address is a contract, then the amount of gas needed can be estimated but cannot be determined with accuracy. That's because a contract can evaluate different conditions that lead to different execution paths, with different total gas costs. The contract may execute only a simple computation or a more complex one, depending on conditions that are outside of your control and cannot be predicted. To demonstrate this, let's look at an example: we can write a smart contract that increments a counter each time it is called and executes a particular loop a number of times equal to the call count. Maybe on the 100th call it gives out a special prize, like a lottery, but needs to do additional computation to calculate the prize. If you call the contract 99 times one thing happens, but on the 100th call something very different happens. The amount of gas you would pay for that depends on how many other transactions have called that function before your transaction is included in a block. Perhaps your estimate is based on being the 99th transaction, but just before your transaction is confirmed someone else calls the contract for the 99th time. Now you're the 100th transaction to call, and the computation effort (and gas cost) is much higher.
 
-그러나 연료 탱크에 대한 비유는 다소 오해의 소지가 있습니다. 실제로 얼마나 많은 가스를 사용했는지에 따라 여행이 완료된 후 지불하는 주유소 회사의 신용 계좌와 비슷합니다. 거래를 전송할 때 첫 번째 검증 단계 중 하나는 출처 계정에 gasPrice * gasLimit를 지불하기에 충분한 이더가 있는지 확인하는 것입니다. 그러나 거래 실행이 완료 될 때까지 금액은 실제로 귀하의 계정에서 공제되지 않습니다. 거래에서 실제로 소비 한 가스에 대해서만 청구되지만 거래를 보내기 전에 지불하려는 최대 금액에 대한 충분한 잔액이 있어야합니다.
+To borrow a common analogy used in Ethereum, you can think of +gasLimit+ as the capacity of the fuel tank in your car (your car is the transaction). You fill the tank with as much gas as you think it will need for the journey (the computation needed to validate your transaction). You can estimate the amount to some degree, but there might be unexpected changes to your journey, such as a diversion (a more complex execution path), that increase fuel consumption.
 
-거래 수신자
-거래 수신자는 to 필드에 지정됩니다. 여기에는 20 바이트 이더 리움 주소가 포함됩니다. 주소는 EOA 또는 계약 주소 일 수 있습니다.
+The analogy to a fuel tank is somewhat misleading, however. It's actually more like a credit account for a gas station company, where you pay after the trip is completed, based on how much gas you actually used. When you transmit your transaction, one of the first validation steps is to check that the account it originated from has enough ether to pay the +gasPrice * gasLimit+. But the amount is not actually deducted from your account until the transaction finishes executing. You are only billed for gas actually consumed by your transaction, but you have to have enough balance for the maximum amount you are willing to pay before you send your transaction.(((range="endofrange", startref="ix_06transactions-asciidoc4")))(((range="endofrange", startref="ix_06transactions-asciidoc3")))
 
-이더 리움은이 필드를 더 이상 검증하지 않습니다. 20 바이트 값은 유효한 것으로 간주됩니다. 20 바이트 값이 해당 개인 키가 없거나 해당 계약이없는 주소에 해당하는 경우 트랜잭션은 여전히 ​​유효합니다. Ethereum은 주소가 존재하는 공개 키 (및 따라서 개인 키)에서 올바르게 파생되었는지 여부를 알 수있는 방법이 없습니다.
+[[tx_recipient]]
+=== Transaction Recipient
 
-경고
-이더 리움 프로토콜은 거래에서 수신자 주소를 검증하지 않습니다. 해당 개인 키 또는 계약이없는 주소로 보낼 수 있으므로 에테르를 "소각"하여 영원히 사용할 수 없게됩니다. 사용자 인터페이스 수준에서 유효성 검사를 수행해야합니다.
+((("transactions","recipient of")))The recipient of a transaction is specified in the +to+ field. This contains a 20-byte Ethereum address. The address can be an EOA or a contract address.
 
-잘못된 주소로 트랜잭션을 보내는 것은 아마 것 화상 이, (unspendable) 영원히 접근 할 수없는 대부분의 주소가 알려진 개인 키 때문에 더 서명을 보내고 생성 할 수 없습니다를 가지고 있지 않기 때문에 렌더링, 에테르하여 전송합니다. 주소의 유효성 검사는 사용자 인터페이스 수준에서 발생한다고 가정합니다 ( [EIP55] 참조 ). 사실, 이더를 태우는 데는 여러 가지 타당한 이유가 있습니다. 예를 들어 지불 채널 및 기타 스마트 계약에서 부정 행위에 대한 인센티브로, 이더의 양이 한정되어 있기 때문에 이더를 태우는 것은 모든 이더 보유자에게 태워 진 가치를 효과적으로 분배합니다. (그들이 보유한 에테르의 양에 비례하여).
+Ethereum does no further validation of this field. Any 20-byte value is considered valid. If the 20-byte value corresponds to an address without a corresponding private key, or without a corresponding contract, the transaction is still valid. Ethereum has no way of knowing whether an address was correctly derived from a public key (and therefore from a private key) in existence.
 
-거래 가치 및 데이터
-거래의 주요 "페이로드"는 값과 데이터의 두 필드에 포함됩니다. 트랜잭션은 값과 데이터를 모두 가질 수 있으며, 값만, 데이터 만 또는 값도 데이터도 없을 수 있습니다. 네 가지 조합이 모두 유효합니다.
+[WARNING]
+====
+The Ethereum protocol does not validate recipient addresses in transactions. You can send to an address that has no corresponding private key or contract, thereby "burning" the ether, rendering it forever unspendable. Validation should be done at the user interface level.
+====
 
-가치 만있는 거래는 지불 입니다. 데이터 만있는 트랜잭션은 호출 입니다. 가치와 데이터가 모두있는 거래는 지불이자 호출입니다. 가치도 데이터도없는 거래-아마도 가스 낭비 일 것입니다! 그러나 여전히 가능합니다.
+((("ether burn")))Sending a transaction to the wrong address will probably _burn_ the ether sent, rendering it forever inaccessible (unspendable), since most addresses do not have a known private key and therefore no signature can be generated to spend it. It is assumed that validation of the address happens at the user interface level (see <<EIP55>>). In fact, there are a number of valid reasons for burning ether&#x2014;for example, as a disincentive to cheating in payment channels and other smart contracts&#x2014;and since the amount of ether is finite, burning ether effectively distributes the value burned to all ether holders (in proportion to the amount of ether they hold).
 
-이 모든 조합을 시도해 봅시다. 먼저 데모를 더 쉽게 읽을 수 있도록 지갑에서 소스 및 대상 주소를 설정합니다.
+[[tx_value_data]]
+=== Transaction Value and Data
 
-src  =  web3 . eth . 계정 [ 0 ] ; 
-dst  =  web3 . eth . 계정 [ 1 ] ;
-첫 번째 트랜잭션에는 값 (지불) 만 포함되며 데이터 페이로드는 없습니다.
+((("transactions","value and data fields", id="ix_06transactions-asciidoc5", range="startofrange")))The main "payload" of a transaction is contained in ((("data field", id="ix_06transactions-asciidoc6", range="startofrange")))((("value field", id="ix_06transactions-asciidoc7", range="startofrange")))two fields: +value+ and +data+. Transactions can have both value and data, only value, only data, or neither value nor data. All four combinations are valid.
 
-web3 . eth . sendTransaction ( { from : src ,  to : dst , \
-   value : web3 . utils . toWei ( 0.01 ,  "ether" ) ,  데이터 : "" } ) ;
-우리 지갑은 전송할 값을 나타내는 확인 화면을 보여줍니다. Parity 지갑은 값이 있지만 데이터가없는 트랜잭션을 보여줍니다 .
+((("invocation")))((("payment")))A transaction with only value is a _payment_. A transaction with only data is an _invocation_. A transaction with both value and data is both a payment and an invocation. A transaction with neither value nor data&#x2014;well that's probably just a waste of gas! But it is still possible.
 
-가치가있는 거래를 보여 주지만 데이터가없는 패리티 지갑
-그림 1. 가치는 있지만 데이터가없는 트랜잭션을 보여주는 패리티 지갑
-다음 예제는 값과 데이터 페이로드를 모두 지정합니다.
+Let's try all of these combinations. First we'll set the source and destination addresses from our wallet, just to make the demo easier to read:
 
-web3 . eth . sendTransaction ( { from : src ,  to : dst , \
-   value : web3 . utils . toWei ( 0.01 ,  "ether" ) ,  데이터 : "0x1234" } ) ;
-우리 지갑은 값과 데이터가있는 거래를 보여주는 패리티 지갑 에서 볼 수 있듯이 보낼 값과 데이터 페이로드를 나타내는 확인 화면을 보여줍니다 .
+[source,javascript]
+----
+src = web3.eth.accounts[0];
+dst = web3.eth.accounts[1];
+----
 
-가치와 데이터가있는 거래를 보여주는 패리티 지갑
-그림 2. 가치와 데이터가있는 트랜잭션을 보여주는 패리티 지갑
-다음 트랜잭션은 데이터 페이로드를 포함하지만 0 값을 지정합니다.
+Our first transaction contains only a value (payment), and no data payload:
 
-web3 . eth . sendTransaction ( { from : src ,  to : dst ,  value : 0 ,  data : "0x1234" } ) ;
-우리 지갑은 0 값과 데이터 페이로드를 나타내는 확인 화면을 보여줍니다. Parity 지갑은 값이없고 데이터 만있는 트랜잭션을 보여줍니다 .
+[[tx_value_nodata_src]]
+[source,javascript]
+----
+web3.eth.sendTransaction({from: src, to: dst, \
+  value: web3.utils.toWei(0.01, "ether"), data: ""});
+----
 
-가치가없고 데이터 만있는 거래를 보여주는 패리티 지갑
-그림 3. 가치가없고 데이터 만있는 트랜잭션을 보여주는 패리티 지갑
-마지막으로 마지막 트랜잭션에는 전송할 값이나 데이터 페이로드가 포함되지 않습니다.
+Our wallet shows a confirmation screen indicating the value to send, as shown in <<parity_txdemo_value_nodata>>.
 
-web3 . eth . sendTransaction ( { from : src ,  to : dst ,  value : 0 ,  data : "" } ) ) ;
-우리 지갑은 값이없고 데이터가없는 거래를 보여주는 패리티 지갑 과 같이 0 값을 나타내는 확인 화면을 보여줍니다 .
+[[parity_txdemo_value_nodata]]
+.Parity wallet showing a transaction with value, but no data
+image::images/parity_txdemo_value_nodata.png["Parity wallet showing a transaction with value, but no data"]
 
-가치와 데이터가없는 거래를 보여주는 패리티 지갑
-그림 4. 가치와 데이터가없는 트랜잭션을 보여주는 패리티 지갑
-EOA 및 계약에 가치 전달
-가치가 포함 된 이더 리움 트랜잭션을 생성하면 결제 와 동일 합니다 . 이러한 거래는 대상 주소가 계약인지 여부에 따라 다르게 작동합니다.
 
-EOA 주소 또는 블록 체인에서 계약으로 표시되지 않은 주소의 경우 Ethereum은 상태 변경을 기록하여 주소 잔액에 보낸 값을 추가합니다. 주소가 이전에 확인되지 않은 경우 고객의 상태에 대한 내부 표현에 추가되고 잔액이 결제 금액으로 초기화됩니다.
+The next example specifies both a value and a data payload:
 
-대상 주소 (to)가 계약 인 경우 EVM은 계약을 실행하고 트랜잭션의 데이터 페이로드에 명명 된 함수를 호출하려고 시도합니다. 트랜잭션에 데이터가 없으면 EVM은 폴백 함수 를 호출하고 해당 함수가 지불 가능한 경우이를 실행하여 다음에 수행 할 작업을 결정합니다. 폴백 기능에 코드가 없으면 거래의 효과는 지갑에 대한 지불과 똑같이 계약 잔액을 증가시키는 것입니다. 대체 기능이 없거나 지불 할 수없는 대체 기능이 없으면 거래가 되돌려집니다.
+[[tx_value_data_src]]
+[source,javascript]
+----
+web3.eth.sendTransaction({from: src, to: dst, \
+  value: web3.utils.toWei(0.01, "ether"), data: "0x1234"});
+----
 
-계약은 함수가 호출 될 때 즉시 예외를 발생 시키거나 함수에 코딩 된 조건에 따라 결정되는 방식으로 들어오는 지불을 거부 할 수 있습니다. 함수가 성공적으로 종료되면 (예외없이) 계약의 이더 잔고 증가를 반영하여 계약 상태가 업데이트됩니다.
+Our wallet shows a confirmation screen indicating the value to send as well as the data payload, as shown in <<parity_txdemo_value_data>>.
 
-데이터 페이로드를 EOA 또는 계약으로 전송
-거래에 데이터가 포함 된 경우 계약 주소로 처리 될 가능성이 높습니다. 그렇다고 EOA에 데이터 페이로드를 보낼 수 없다는 의미는 아닙니다. 이는 이더 리움 프로토콜에서 완전히 유효합니다. 그러나이 경우 데이터 해석은 EOA에 액세스하는 데 사용하는 지갑에 달려 있습니다. Ethereum 프로토콜에서는 무시됩니다. 대부분의 지갑은 또한 그들이 제어하는 ​​EOA에 대한 거래에서받은 모든 데이터를 무시합니다. 미래에는 지갑이 계약과 같은 방식으로 데이터를 해석 할 수 있도록하는 표준이 등장하여 트랜잭션이 사용자 지갑 내에서 실행되는 기능을 호출 할 수 있도록 할 수 있습니다. 중요한 차이점은 EOA에 의한 데이터 페이로드의 해석은 계약 실행 과 달리 이더 리움의 합의 규칙의 적용을받지 않는다는 것 입니다.
+[[parity_txdemo_value_data]]
+.Parity wallet showing a transaction with value and data
+image::images/parity_txdemo_value_data.png["Parity wallet showing a transaction with value and data"]
 
-지금은 거래가 계약 주소로 데이터를 전달한다고 가정 해 보겠습니다. 이 경우 데이터는 EVM에 의해 계약 호출 로 해석 됩니다 . 대부분의 계약은이 데이터를보다 구체적으로 함수 호출 로 사용 하여 명명 된 함수를 호출하고 인코딩 된 인수를 함수에 전달합니다.
+The next transaction includes a data payload but specifies a value of zero:
 
-ABI 호환 계약 (모든 계약이 있다고 가정 할 수 있음)으로 전송 된 데이터 페이로드는 다음과 같은 16 진수 직렬 인코딩입니다.
+[[tx_novalue_data_src]]
+[source,javascript]
+----
+web3.eth.sendTransaction({from: src, to: dst, value: 0, data: "0x1234"});
+----
 
-기능 선택기
-함수 프로토 타입의 Keccak-256 해시의 처음 4 바이트입니다. 이를 통해 계약은 호출하려는 함수를 모호하지 않게 식별 할 수 있습니다.
+Our wallet shows a confirmation screen indicating the zero value and the data payload, as shown in <<parity_txdemo_novalue_data>>.
 
-함수 인수
-ABI 사양에 정의 된 다양한 기본 유형에 대한 규칙에 따라 인코딩 된 함수의 인수입니다.
+[[parity_txdemo_novalue_data]]
+.Parity wallet showing a transaction with no value, only data
+image::images/parity_txdemo_novalue_data.png["Parity wallet showing a transaction with no value, only data"]
 
-에서는 [solidity_faucet_example]는 , 우리는 인출하는 기능을 정의 :
+[role="pagebreak-before"]
+Finally, the last transaction includes neither a value to send nor a data payload:
 
-function withdraw ( uint  withdraw_amount ) public {
-함수 의 프로토 타입 은 함수 이름이 포함 된 문자열로 정의되고 그 뒤에 각 인수의 데이터 유형이 괄호로 묶여 있고 쉼표로 구분됩니다. 여기서 함수 이름은 withdraw이고 uint (uint256의 별칭) 인 단일 인수를 취하므로 withdraw의 프로토 타입은 다음과 같습니다.
+[[tx_novalue_nodata_src]]
+[source,javascript]
+----
+web3.eth.sendTransaction({from: src, to: dst, value: 0, data: ""}));
+----
 
-철회 ( uint256 )
-이 문자열의 Keccak-256 해시를 계산해 보겠습니다.
+Our wallet shows a confirmation screen indicating zero value, as shown in <<parity_txdemo_novalue_nodata>>.
 
-> web3.utils.sha3 ( "withdraw (uint256)");
+[[parity_txdemo_novalue_nodata]]
+.Parity wallet showing a transaction with no value, and no data
+image::images/parity_txdemo_novalue_nodata.png["Parity wallet showing a transaction with no value, and no data"]
+
+[[value_EOA_contracts]]
+==== Transmitting Value to EOAs and Contracts
+
+((("EOA (Externally Owned Account)","transmitting value to")))((("smart contracts","transmitting value to")))((("transactions","transmitting value to EOAs and contract")))When you construct an Ethereum transaction that contains a value, it is the equivalent of a _payment_. Such transactions behave differently depending on whether the destination address is a contract or not.
+
+For EOA addresses, or rather for any address that isn't flagged as a contract on the blockchain, Ethereum will record a state change, adding the value you sent to the balance of the address. If the address has not been seen before, it will be added to the client's internal representation of the state and its balance initialized to the value of your payment.
+
+If the destination address (+to+) is a contract, then the EVM will execute the contract and will attempt to call the function named in the data payload of your transaction. If there is no data in your transaction, the EVM will call a _fallback_ function and, if that function is payable, will execute it to determine what to do next. If there is no code in fallback function, then the effect of the transaction will be to increase the balance of the contract, exactly like a payment to a wallet. If there is no fallback function or non-payable fallback function, then transaction will be reverted. 
+
+A contract can reject incoming payments by throwing an exception immediately when a function is called, or as determined by conditions coded in a function. If the function terminates successfully (without an exception), then the contract's state is updated to reflect an increase in the contract's ether balance.(((range="endofrange", startref="ix_06transactions-asciidoc7")))(((range="endofrange", startref="ix_06transactions-asciidoc6")))
+
+[[data_EOA]]
+==== Transmitting a Data Payload to an EOA or Contract
+
+((("data payload, transmitting to EOAs and contracts", id="ix_06transactions-asciidoc8", range="startofrange")))((("EOA (Externally Owned Account)","transmitting data payload to", id="ix_06transactions-asciidoc9", range="startofrange")))((("smart contracts","transmitting data payload to", id="ix_06transactions-asciidoc10", range="startofrange")))((("transactions","transmitting data payload to EOAs and contracts", id="ix_06transactions-asciidoc11", range="startofrange")))When your transaction contains data, it is most likely addressed to a contract address. That doesn't mean you cannot send a data payload to an EOA&#x2014;that is completely valid in the Ethereum protocol. However, in that case, the interpretation of the data is up to the wallet you use to access the EOA. It is ignored by the Ethereum protocol. Most wallets also ignore any data received in a transaction to an EOA they control. In the future, it is possible that standards may emerge that allow wallets to interpret data the way contracts do, thereby allowing transactions to invoke functions running inside user wallets. The critical difference is that any interpretation of the data payload by an EOA is not subject to Ethereum's consensus rules, unlike a contract pass:[<span class="keep-together">execution</span>].
+
+For now, let's assume your transaction is delivering data to a contract address. ((("contract invocation")))((("invocation")))In that case, the data will be interpreted by the EVM as a _contract invocation_. ((("function invocation")))Most contracts use this data more specifically as a _function invocation_, calling the named function and passing any encoded arguments to the function.
+
+The data payload sent to an ABI-compatible contract (which you can assume all contracts are) is a hex-serialized encoding of:
+
+A function selector:: The first 4 bytes of the Keccak-256 hash of the function's prototype. This allows the contract to unambiguously identify which function you wish to invoke.
+
+The function arguments:: The function's arguments, encoded according to the rules for the various elementary types defined in the ABI specification.
+
+In <<solidity_faucet_example>>, we defined a function for withdrawals:
+
+[[withdraw_function_src]]
+[source,solidity]
+----
+function withdraw(uint withdraw_amount) public {
+----
+
+((("prototype of a function")))The _prototype_ of a function is defined as the string containing the name of the function, followed by the data types of each of its arguments, enclosed in parentheses and separated by commas. The function name here is +withdraw+ and it takes a single argument that is a +uint+ (which is an alias for +uint256+), so the prototype of +withdraw+ would be:
+
+[source,solidity]
+----
+withdraw(uint256)
+----
+
+Let's calculate the Keccak-256 hash of this string:
+
+++++
+<pre data-type="programlisting">
+> <strong>web3.utils.sha3("withdraw(uint256)");</strong>
 '0x2e1a7d4d13322e7b96f9a57413e1525c250fb7a9021cf91d1540d5b69f16a49f'
-해시의 처음 4 바이트는 0x2e1a7d4d입니다. 이것이 우리가 호출하고자하는 함수를 계약에 알려주는 "함수 선택자"값입니다.
+</pre>
+++++
 
-다음으로 withdraw_amount 인수로 전달할 값을 계산해 보겠습니다. 0.01 에테르를 인출하려고합니다. 이를 wei로 표시된 16 진수 직렬화 된 빅 엔디안 부호없는 256 비트 정수로 인코딩 해 보겠습니다.
+The first 4 bytes of the hash are +0x2e1a7d4d+. That's our "function selector" value, which will tell the contract which function we want to call.
 
-> withdraw_amount = web3.utils.toWei (0.01, "ether");
+Next, let's calculate a value to pass as the argument +withdraw_amount+. We want to withdraw 0.01 ether. Let's encode that to a hex-serialized big-endian unsigned 256-bit integer, denominated in wei:
+
+++++
+<pre data-type="programlisting">
+> <strong>withdraw_amount = web3.utils.toWei(0.01, "ether");</strong>
 '10000000000000000'
-> withdraw_amount_hex = web3.utils.toHex (withdraw_amount);
+> <strong>withdraw_amount_hex = web3.utils.toHex(withdraw_amount);</strong>
 '0x2386f26fc10000'
-이제 함수 선택기를 양에 추가합니다 (32 바이트로 채워짐).
+</pre>
+++++
 
+Now, we add the function selector to the amount (padded to 32 bytes):
+
+----
 2e1a7d4d000000000000000000000000000000000000000000000000002386f26fc10000
-이것이 우리 트랜잭션에 대한 데이터 페이로드이며, 인출 기능을 호출하고 withdraw_amount로 0.01 에테르를 요청합니다.
+----
 
-특별 거래 : 계약 생성
-우리가 언급해야 할 한 가지 특별한 경우 는 블록 체인에서 새로운 계약 을 생성하여 향후 사용을 위해 배포 하는 트랜잭션입니다 . 계약 생성 트랜잭션은 제로 주소 라는 특수 대상 주소로 전송됩니다 . 계약 등록 트랜잭션의 to 필드에는 주소 0x0이 포함됩니다. 이 주소는 EOA (해당하는 개인-공개 키 쌍 없음)도 계약도 아닙니다. 이더를 사용하거나 거래를 시작할 수 없습니다. "이 계약 작성"이라는 특별한 의미를 가진 목적지로만 사용됩니다.
+That's the data payload for our transaction, invoking the +withdraw+ function and requesting 0.01 ether as the +withdraw_amount+(((range="endofrange", startref="ix_06transactions-asciidoc11")))(((range="endofrange", startref="ix_06transactions-asciidoc10")))(((range="endofrange", startref="ix_06transactions-asciidoc9")))(((range="endofrange", startref="ix_06transactions-asciidoc8"))).(((range="endofrange", startref="ix_06transactions-asciidoc5")))
 
-제로 주소는 계약 작성 전용이지만 때때로 다양한 주소에서 지불을받습니다. 이에 대한 두 가지 설명이 있습니다. 우연히 에테르를 잃어 버리거나 의도적 인 에테르 연소 (이더를 사용할 수없는 주소로 전송 하여 의도적으로 에테르를 파괴하는 것)입니다. 그러나 의도적 인 이더 레코딩을 수행하려면 네트워크에 의도를 분명히 밝히고 대신 특별히 지정된 레코딩 주소를 사용해야합니다.
+[[contract_reg]]
+=== Special Transaction: Contract Creation
 
+((("contract creation transaction", id="ix_06transactions-asciidoc12", range="startofrange")))((("transactions","contract creation", id="ix_06transactions-asciidoc13", range="startofrange")))One special case that we should mention is a transaction that _creates a new contract_ on the blockchain, deploying it for future use. ((("zero address","contract creation")))Contract creation transactions are sent to a special destination address called the _zero address_; the +to+ field in a contract registration transaction contains the address +0x0+. This address represents neither an EOA (there is no corresponding private–public key pair) nor a contract. It can never spend ether or initiate a transaction. It is only used as a destination, with the special meaning "create this contract."
+
+While the zero address is intended only for contract creation, it sometimes receives payments from various addresses. ((("ether burn")))There are two explanations for this: either it is by accident, resulting in the loss of ether, or it is an intentional _ether burn_ (deliberately destroying ether by sending it to an address from which it can never be spent). However, if you want to do an intentional ether burn, you should make your intention clear to the network and use the specially designated burn address instead:
+
+[[burn_address]]
+----
 0x000000000000000000000000000000000000dEaD
-경고
-지정된 번 주소로 전송 된 모든 이더는 사용할 수 없게되고 영원히 손실됩니다.
+----
 
-계약 생성 트랜잭션은 계약을 생성 할 컴파일 된 바이트 코드를 포함하는 데이터 페이로드 만 포함하면됩니다. 이 거래의 유일한 효과는 계약을 생성하는 것입니다. 시작 잔액으로 새 계약을 설정하려는 경우 값 필드에 에테르 금액을 포함 할 수 있지만 이는 전적으로 선택 사항입니다. 데이터 페이로드 (계약 없음)없이 계약 생성 주소로 값 (ether)을 보내면 그 효과는 소각 주소로 보내는 것과 동일합니다. 크레딧에 대한 계약이 없으므로 이더는 손실됩니다.
+[WARNING]
+====
+Any ether sent to the designated burn address will become unspendable and be lost forever.
+====
 
-예를 들어 [intro_chapter] 에서 사용되는 Faucet.sol 컨트랙트 는 데이터 페이로드의 컨트랙트와 함께 제로 주소에 대한 트랜잭션을 수동으로 생성하여 생성 할 수 있습니다. 계약은 바이트 코드 표현으로 컴파일되어야합니다. 이것은 Solidity 컴파일러로 수행 할 수 있습니다.
+A contract creation transaction need only contain a data payload that contains the compiled bytecode which will create the contract. The only effect of this transaction is to create the contract. You can include an ether amount in the +value+ field if you want to set the new contract up with a starting balance, but that is entirely optional. If you send a value (ether) to the contract creation address without a data payload (no contract), then the effect is the same as sending to a burn address&#x2014;there is no contract to credit, so the ether is lost.
 
-$ solc --bin Faucet.sol
+As an example, we can create the _Faucet.sol_ contract used in <<intro_chapter>> by manually creating a transaction to the zero address with the contract in the data payload. The contract needs to be compiled into a bytecode representation. This can be done with the Solidity compiler:
 
-바이너리 :
-6060604052341561000f57600080fd5b60e58061001d6000396000f30060606040526004361060 ...
-Remix 온라인 컴파일러에서도 동일한 정보를 얻을 수 있습니다.
+++++
+<pre data-type="programlisting" class="pagebreak-before">
+$ <strong>solc --bin Faucet.sol</strong>
 
-이제 트랜잭션을 생성 할 수 있습니다.
+Binary:
+6060604052341561000f57600080fd5b60e58061001d6000396000f30060606040526004361060...
+</pre>
+++++
 
-> src = web3.eth.accounts [0]; 
-> faucet_code = \
-  "0x6060604052341561000f57600080fd5b60e58061001d6000396000f300606 ... f0029"; 
-> web3.eth.sendTransaction ({from : src, to : 0, data : faucet_code, \
-  가스 : 113558, 가스 가격 : 200000000000});
+The same information can also be obtained from the Remix online compiler.
+
+Now we can create the transaction:
+
+++++
+<pre data-type="programlisting">
+> <strong>src = web3.eth.accounts[0];</strong>
+> <strong>faucet_code = \
+  "0x6060604052341561000f57600080fd5b60e58061001d6000396000f300606...f0029";</strong>
+> <strong>web3.eth.sendTransaction({from: src, to: 0, data: faucet_code, \
+  gas: 113558, gasPrice: 200000000000});</strong>
 
 "0x7bcc327ae5d369f75b98c0d59037eec41d44dfae75447fd753d9f2db9439124b"
-주소가 0 인 계약 생성의 경우에도 항상 to 매개 변수를 지정하는 것이 좋습니다. 실수로 에테르를 0x0으로 보내고 영원히 잃는 비용이 너무 크기 때문입니다. gasPrice 및 gasLimit도 지정해야합니다.
+</pre>
+++++
 
-계약이 채굴되면 Etherscan 블록 탐색기 에서 계약이 성공적으로 채굴되었음을 보여주는 Etherscan 에서 볼 수 있습니다 .
+It is good practice to always specify a +to+ parameter, even in the case of zero-address contract creation, because the cost of accidentally sending your ether to +0x0+ and losing it forever is too great. You should also specify a +gasPrice+ and +gasLimit+.
 
-계약이 성공적으로 채굴되었음을 보여주는 Etherscan
-그림 5. 성공적으로 채굴 된 계약을 보여주는 Etherscan
-계약에 대한 정보를 얻기 위해 거래 영수증을 볼 수 있습니다.
+Once the contract is mined we can see it on the Etherscan block explorer, as shown in <<publish_contract_from_web3>>.
 
-> web3.eth.getTransactionReceipt (\
-  "0x7bcc327ae5d369f75b98c0d59037eec41d44dfae75447fd753d9f2db9439124b");
+[[publish_contract_from_web3]]
+.Etherscan showing the contract successfully mined
+image::images/contract_published.png["Etherscan showing the contract successfully mined"]
+
+We can look at the receipt of the transaction to get information about the contract:
+
+++++
+<pre data-type="programlisting">
+> <strong>web3.eth.getTransactionReceipt( \
+  "0x7bcc327ae5d369f75b98c0d59037eec41d44dfae75447fd753d9f2db9439124b");</strong>
 
 {
-  blockHash : "0x6fa7d8bf982490de6246875deb2c21e5f3665b4422089c060138fc3907a95bb2",
-  blockNumber : 3105256,
-  contractAddress : "0xb226270965b43373e98ffc6e2c7693c17e2cf40b",
-  cumulativeGasUsed : 113558,
-  보낸 사람 : "0x2a966a87db5913c1b22a59b0d8a11cc51c167a89",
-  사용 된 가스 : 113558,
-  로그 : [],
-  logsBloom : \
-    "0x00000000000000000000000000000000000000000000000000 ... 00000",
-  상태 : "0x1",
-  to : null,
-  transactionHash : \
+  blockHash: "0x6fa7d8bf982490de6246875deb2c21e5f3665b4422089c060138fc3907a95bb2",
+  blockNumber: 3105256,
+  contractAddress: "0xb226270965b43373e98ffc6e2c7693c17e2cf40b",
+  cumulativeGasUsed: 113558,
+  from: "0x2a966a87db5913c1b22a59b0d8a11cc51c167a89",
+  gasUsed: 113558,
+  logs: [],
+  logsBloom: \
+    "0x00000000000000000000000000000000000000000000000000...00000",
+  status: "0x1",
+  to: null,
+  transactionHash: \
     "0x7bcc327ae5d369f75b98c0d59037eec41d44dfae75447fd753d9f2db9439124b",
-  transactionIndex : 0
+  transactionIndex: 0
 }
-여기에는 이전 섹션에 표시된 것처럼 계약으로 자금을 보내고받는 데 사용할 수있는 계약 주소가 포함됩니다.
+</pre>
+++++
 
-> contract_address = "0xb226270965b43373e98ffc6e2c7693c17e2cf40b" 
-> web3.eth.sendTransaction ({from : src, to : contract_address, \
-  값 : web3.utils.toWei (0.1, "ether"), 데이터 : ""});
+This includes the address of the contract, which we can use to send funds to and receive funds from the contract as shown in the previous section:
+
+++++
+<pre data-type="programlisting">
+> <strong>contract_address = "0xb226270965b43373e98ffc6e2c7693c17e2cf40b"</strong>
+> <strong>web3.eth.sendTransaction({from: src, to: contract_address, \
+  value: web3.utils.toWei(0.1, "ether"), data: ""});</strong>
 
 "0x6ebf2e1fe95cc9c1fe2e1a0dc45678ccd127d374fdf145c5c8e6cd4ea2e6ca9f"
 
-> web3.eth.sendTransaction ({from : src, to : contract_address, value : 0, data : \
-  "0x2e1a7d4d000000000000000000000000000000000000000000000000002386f26fc10000"});
+> <strong>web3.eth.sendTransaction({from: src, to: contract_address, value: 0, data: \
+  "0x2e1a7d4d000000000000000000000000000000000000000000000000002386f26fc10000"});</strong>
+
+"0x59836029e7ce43e92daf84313816ca31420a76a9a571b69e31ec4bf4b37cd16e"
+</pre>
+++++
+
+After a while, both transactions are visible on Etherscan, as shown in <<publish_contract_transactions>>.(((range="endofrange", startref="ix_06transactions-asciidoc13")))(((range="endofrange", startref="ix_06transactions-asciidoc12")))
+
+[[publish_contract_transactions]]
+.Etherscan showing the transactions for sending and receiving funds
+image::images/published_contract_transactions.png["Etherscan showing the transactions for sending and receiving funds"]
+
+
+[[digital_sign]]
+=== Digital Signatures
+
+((("digital signatures", id="ix_06transactions-asciidoc14", range="startofrange")))((("transactions","digital signatures and", id="ix_06transactions-asciidoc15", range="startofrange")))So far, we have not delved into any detail about digital signatures. In this section, we look at how digital signatures work and how they can be used to present proof of ownership of a private key without revealing that private key.
+
+[[ecdsa]]
+==== The Elliptic Curve Digital Signature Algorithm
+
+((("digital signatures","ECDSA and")))((("Elliptic Curve Digital Signature Algorithm (ECDSA)","about")))The digital signature algorithm used in Ethereum is the _Elliptic Curve Digital Signature Algorithm_ (ECDSA). It's based on elliptic curve private–public key pairs, as described in <<elliptic_curve>>.
+
+A digital signature serves three purposes in Ethereum (see the following sidebar). First, the signature proves that the owner of the private key, who is by implication the owner of an Ethereum account, has _authorized_ the spending of ether, or execution of a contract. ((("non-repudiation")))Secondly, it guarantees _non-repudiation_: the proof of authorization is undeniable. Thirdly, the signature proves that the transaction data has not been and _cannot be modified_ by anyone after the transaction has been signed.
+
+[[digital_signature_definition]]
+.Wikipedia's Definition of a Digital Signature
+****
+((("digital signatures","Wikipedia definition")))A _digital signature_ is a mathematical scheme for presenting the authenticity of digital messages or documents. A valid digital signature gives a recipient reason to believe that the message was created by a known sender (authentication), that the sender cannot deny having sent the message (non-repudiation), and that the message was not altered in transit (integrity).
+
+_Source: https://en.wikipedia.org/wiki/Digital_signature_
+****
+
+[[digital_sign_work]]
+==== How Digital Signatures Work
+
+((("digital signatures","mechanism of operation")))A digital signature is a mathematical scheme that consists of two parts. The first part is an algorithm for creating a signature, using a private key (the signing key), from a message (which in our case is the transaction). The second part is an algorithm that allows anyone to verify the signature by only using the message and a public key.
+
+[[digital_sign_create]]
+===== Creating a digital signature
+
+((("digital signatures","creating")))((("Elliptic Curve Digital Signature Algorithm (ECDSA)","signature creation")))In Ethereum's implementation of ECDSA, the "message" being signed is the transaction, or more accurately, the Keccak-256 hash of the RLP-encoded data from the transaction. The signing key is the EOA's private key. The result is the signature:
+
+++++
+<div data-type="equation">
+<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">
+  <mrow>
+    <mrow>
+      <mi>S</mi>
+      <mi>i</mi>
+      <mi>g</mi>
+    </mrow>
+    <mo>=</mo>
+    <msub><mi>F</mi> <mrow><mi>s</mi><mi>i</mi><mi>g</mi></mrow> </msub>
+    <mrow>
+      <mo>(</mo>
+      <msub><mi>F</mi> <mrow><mi>k</mi><mi>e</mi><mi>c</mi><mi>c</mi><mi>a</mi><mi>k</mi><mn>256</mn></mrow> </msub>
+      <mrow>
+        <mo>(</mo>
+        <mi>m</mi>
+        <mo>)</mo>
+      </mrow>
+      <mo>,</mo>
+      <mi>k</mi>
+      <mo>)</mo>
+    </mrow>
+  </mrow>
+</math>
+</div>
+++++
 
-'0x59836029e7ce43e92daf84313816ca31420a76a9a571b69e31ec4bf4b37cd16e'
-잠시 후 Etherscan에 표시된 것처럼 두 거래 모두 Etherscan에서 볼 수 있으며 자금을 보내고받는 거래를 보여줍니다 .
+where:
 
-Etherscan은 자금을 보내고받는 거래를 보여줍니다.
-그림 6. 자금 송수신을위한 트랜잭션을 보여주는 Etherscan
-디지털 서명
-지금까지 우리는 디지털 서명에 대해 자세히 다루지 않았습니다. 이 섹션에서는 디지털 서명의 작동 방식과 개인 키를 공개하지 않고 개인 키의 소유권 증명을 제공하는 데 사용할 수있는 방법을 살펴 봅니다.
+* _k_ is the signing private key.
+* _m_ is the RLP-encoded transaction.
+* _F_~_keccak256_~ is the Keccak-256 hash function.
+* _F_~_sig_~ is the signing algorithm.
+* _Sig_ is the resulting signature.
 
-타원 곡선 디지털 서명 알고리즘
-Ethereum에서 사용되는 디지털 서명 알고리즘은 Elliptic Curve Digital Signature Algorithm (ECDSA)입니다. [elliptic_curve]에 설명 된대로 타원 곡선 개인-공개 키 쌍을 기반으로 합니다.
+[[sign_function]]
+The function _F_~_sig_~ produces a signature __Sig__ that is composed of two values, commonly referred to as _r_ and _s_:
 
-디지털 서명은 이더 리움에서 세 가지 용도로 사용됩니다 (다음 사이드 바 참조). 첫째, 서명은 Ethereum 계정의 소유자 인 개인 키 소유자가 이더 사용 또는 계약 실행을 승인 했음을 증명합니다 . 둘째, 부인 방지를 보장 합니다. 인증 증명은 부인할 수 없습니다. 셋째, 서명은 거래 데이터가 거래가 서명 된 후 누구도 수정 하지 않았으며 수정할 수 없음을 증명합니다 .
+++++
+<div data-type="equation">
+<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">
+  <mrow>
+    <mrow>
+      <mi>S</mi>
+      <mi>i</mi>
+      <mi>g</mi>
+    </mrow>
+    <mo>=</mo>
+    <mo>(</mo>
+    <mi>r</mi>
+    <mo>,</mo>
+    <mi>s</mi>
+    <mo>)</mo>
+  </mrow>
+</math>
+</div>
+++++
 
-Wikipedia의 디지털 서명 정의
-디지털 서명은 디지털 메시지 나 문서의 진위를 표현하기위한 수학적 기법이다. 유효한 디지털 서명은 수신자에게 알려진 발신자 (인증)가 메시지를 생성했으며 발신자가 메시지 전송을 거부 할 수 없으며 (거부 방지) 메시지가 전송 중에 변경되지 않았다고 믿을 수있는 이유를 제공합니다 (무결성). .
+[[verify_sign]]
+==== Verifying the Signature
 
-출처 : https://en.wikipedia.org/wiki/Digital_signature
+((("digital signatures","verifying")))To verify the signature, one must have the signature (_r_ and _s_), the serialized transaction, and the public key that corresponds to the private key used to create the signature. Essentially, verification of a signature means "only the owner of the private key that generated this public key could have produced this signature on this transaction."
 
-디지털 서명의 작동 방식
-디지털 서명은 두 부분으로 구성된 수학적 체계입니다. 첫 번째 부분은 메시지 (이 경우 트랜잭션)에서 개인 키 (서명 키)를 사용하여 서명을 생성하는 알고리즘입니다. 두 번째 부분은 누구나 메시지와 공개 키를 사용하여 서명을 확인할 수있는 알고리즘입니다.
+The signature verification algorithm takes the message (i.e., a hash of the transaction for our usage), the signer's public key, and the signature (_r_ and _s_ values), and returns +true+ if the signature is valid for this message and public key.
 
-디지털 서명 생성
-Ethereum의 ECDSA 구현에서 서명되는 "메시지"는 트랜잭션 또는 더 정확하게는 트랜잭션에서 RLP로 인코딩 된 데이터의 Keccak-256 해시입니다. 서명 키는 EOA의 개인 키입니다. 결과는 서명입니다.
+[[ecdsa_math]]
+==== ECDSA Math
 
-S i g = F 시그 (F keccak256 (m), k)
-어디:
+((("digital signatures","ECDSA math", id="ix_06transactions-asciidoc16", range="startofrange")))((("Elliptic Curve Digital Signature Algorithm (ECDSA)","mathematics of", id="ix_06transactions-asciidoc17", range="startofrange")))As mentioned previously, signatures are created by a mathematical function _F_~_sig_~ that produces a signature composed of two values, _r_ and _s_. In this section we look at the function _F_~_sig_~ in more detail.
 
-k 는 서명 개인 키입니다.
+((("ephemeral private key")))The signature algorithm first generates an _ephemeral_ (temporary) private key in a cryptographically secure way. This temporary key is used in the calculation of the _r_ and _s_ values to ensure that the sender's actual private key can't be calculated by attackers watching signed transactions on the Ethereum network.
 
-m 은 RLP로 인코딩 된 트랜잭션입니다.
+As we know from <<pubkey>>, the ephemeral private key is used to derive the corresponding (ephemeral) public key, so we have:
 
-F keccak256 은 Keccak-256 해시 함수입니다.
+* A cryptographically secure random number _q_, which is used as the ephemeral private key
+* The corresponding ephemeral public key _Q_, generated from _q_ and the elliptic curve generator point _G_
 
-F sig 는 서명 알고리즘입니다.
+The _r_ value of the digital signature is then the _x_ coordinate of the ephemeral public key _Q_.
 
-Sig 는 결과 서명입니다.
+From there, the algorithm calculates the _s_ value of the signature, such that:
 
-F sig 함수 는 일반적으로 r 및 s 라고하는 두 개의 값으로 구성된 서명 Sig 를 생성합니다 .
+++++
+<ul class="simplelist">
+<li><em>s</em> &#8801; <em>q</em><sup>-1</sup> (<em>Keccak256</em>(<em>m</em>) + <em>r</em> * <em>k</em>)  &nbsp;  &nbsp; (<em>mod p</em>)</li>
+</ul>
+++++
 
-시 g = (r, s)
-서명 확인
-서명을 확인하려면 서명 ( r 및 s ), 직렬화 된 트랜잭션 및 서명을 만드는 데 사용 된 개인 키에 해당하는 공개 키가 있어야합니다. 기본적으로 서명 확인은 "이 공개 키를 생성 한 개인 키의 소유자 만이 트랜잭션에서이 서명을 생성 할 수있었습니다"를 의미합니다.
+where:
 
-서명 확인 알고리즘은 메시지 (즉, 우리가 사용할 트랜잭션의 해시), 서명자의 공개 키, 서명 ( r 및 s 값)을 가져 와서이 메시지와 공개 키에 대해 서명이 유효한 경우 true를 반환합니다.
+* _q_ is the ephemeral private key.
+* _r_ is the _x_ coordinate of the ephemeral public key.
+* _k_ is the signing (EOA owner's) private key.
+* _m_ is the transaction data.
+* _p_ is the prime order of the elliptic curve.
 
-ECDSA 수학
-앞서 언급했듯이 서명은 r 과 s 라는 두 값으로 구성된 서명을 생성하는 수학 함수 F sig에 의해 생성됩니다 . 이 섹션에서는 F sig 함수 를 더 자세히 살펴 봅니다.
+Verification is the inverse of the signature generation function, using the _r_ and _s_ values and the sender's public key to calculate a value _Q_, which is a point on the elliptic curve (the ephemeral public key used in signature creation). The steps are as follows:
 
-서명 알고리즘은 먼저 암호화 보안 방식으로 임시 (임시) 개인 키를 생성합니다 . 이 임시 키는 이더 리움 네트워크에서 서명 된 트랜잭션을 감시하는 공격자가 보낸 사람의 실제 개인 키를 계산할 수 없도록 r 및 s 값 계산에 사용됩니다.
+1. Check all inputs are correctly formed
+2. Calculate _w_ = __s__^-1^ _mod p_
+3. Calculate _u~1~_ = __Keccak256__(__m__) * _w_ _mod p_
+4. Calculate _u~2~_ = _r_ * _w_ _mod p_
+5. Finally, calculate the point on the elliptic curve _Q_ &#8801; _u~1~_ * _G_ + _u~2~_ * _K_  {nbsp} {nbsp} (_mod p_)
 
-[pubkey] 에서 알 수 있듯이 임시 개인 키는 해당 (임시) 공개 키를 파생하는 데 사용되므로 다음과 같이됩니다.
+where:
 
-임시 개인 키로 사용되는 암호화 보안 난수 q
+* _r_ and _s_ are the signature values.
+* _K_ is the signer's (EOA owner's) public key.
+* _m_ is the transaction data that was signed.
+* _G_ is the elliptic curve generator point.
+* _p_ is the prime order of the elliptic curve.
 
-q 및 타원 곡선 생성기 점 G 에서 생성 된 해당 임시 공개 키 Q
+If the _x_ coordinate of the calculated point _Q_ is equal to _r_, then the verifier can conclude that the signature is valid.
 
-디지털 서명 의 r 값은 임시 공개 키 Q 의 x 좌표입니다 .
+Note that in verifying the signature, the private key is neither known nor revealed.
 
-여기에서 알고리즘은 다음 과 같이 서명 의 s 값을 계산합니다 .
+[TIP]
+====
+ECDSA is necessarily a fairly complicated piece of math; a full explanation is beyond the scope of this book. A number of great guides online take you through it step by step: search for "ECDSA explained" or try this one: http://bit.ly/2r0HhGB[].(((range="endofrange", startref="ix_06transactions-asciidoc17")))(((range="endofrange", startref="ix_06transactions-asciidoc16")))
+====
 
-s ≡ q -1 ( Keccak256 ( m ) + r * k ) ( mod p )
-어디:
+[[tx_sign]]
+==== Transaction Signing in Practice
 
-q 는 임시 개인 키입니다.
+((("digital signatures","signing in practice")))((("Elliptic Curve Digital Signature Algorithm (ECDSA)","transaction signing in practice")))((("transactions","signing in practice")))To produce a valid transaction, the originator must digitally sign the message, using the Elliptic Curve Digital Signature Algorithm. When we say "sign the transaction" we actually mean "sign the Keccak-256 hash of the RLP-serialized transaction data." The signature is applied to the hash of the transaction data, not the transaction itself.
 
-r 은 임시 공개 키 의 x 좌표입니다.
+To sign a transaction in Ethereum, the originator must:
 
-k 는 서명 (EOA 소유자)의 개인 키입니다.
+1. Create a transaction data structure, containing nine fields: +nonce+, +gasPrice+, +gasLimit+, +to+, +value+, +data+, +chainID+, +0+, +0+.
+2. Produce an RLP-encoded serialized message of the transaction data structure.
+3. Compute the Keccak-256 hash of this serialized message.
+4. Compute the ECDSA signature, signing the hash with the originating EOA's private key.
+5. Append the ECDSA signature's computed +v+, +r+, and +s+ values to the transaction.
 
-m 은 거래 데이터입니다.
+The special signature variable +v+ indicates two things: the chain ID and the recovery identifier to help the +ECDSArecover+ function check the signature. It is calculated as either one of 27 or 28, or as the chain ID doubled plus 35 or 36. For more information on the chain ID, see <<raw_tx_eip155>>. The recovery identifier (27 or 28 in the "old-style" signatures, or 35 or 36 in the full Spurious Dragon&#x2013;style transactions) is used to indicate the parity of the +y+ component of the public key (see <<sign_prefix>> for more details).
 
-p 는 타원 곡선의 소수 차수입니다.
 
-검증은 r 및 s 값과 보낸 사람의 공개 키를 사용 하여 타원 곡선 (서명 생성에 사용되는 임시 공개 키)의 한 지점 인 값 Q 를 계산하는 서명 생성 함수의 역입니다 . 단계는 다음과 같습니다.
+[NOTE]
+====
+((("Spurious Dragon")))At block #2,675,000 Ethereum implemented the "Spurious Dragon" hard fork, which, among other changes, introduced a new signing scheme that includes transaction replay protection (preventing transactions meant for one network being replayed on others). This new signing scheme is specified in EIP-155. This change affects the form of the transaction and its signature, so attention must be paid to the first of the three signature variables (i.e., +v+), which takes one of two forms and indicates the data fields included in the transaction message being hashed.
+====
 
-모든 입력이 올바르게 구성되었는지 확인
 
-w = s -1 mod p 계산
+[[raw_tx]]
+==== Raw Transaction Creation and Signing
 
-계산 U (1) = Keccak256 ( m ) * w 개조 P
+((("EthereumJS")))((("transactions","raw transaction creation/signing")))In this section we'll create a raw transaction and sign it, using the +ethereumjs-tx+ library, which can be installed with npm. This demonstrates the functions that would normally be used inside a wallet, or an application that signs transactions on behalf of a user. The source code for this example is in the file __raw_tx_demo.js__ in the book's http://bit.ly/2yI2GL3[GitHub repository]:
 
-계산 U (2) = R * w 개조 P
+[[raw_tx_demo_source]]
+[source,javascript]
+----
+include::code/web3js/raw_tx/raw_tx_demo.js[]
+----
 
-마지막으로 타원 곡선 Q ≡ u 1 * G + u 2 * K     ( mod p )
+[[raw_tx_demo_run]]
+Running the example code produces the following results:
 
-어디:
+++++
+<pre data-type="programlisting">
+$ <strong>node raw_tx_demo.js</strong>
+RLP-Encoded Tx: 0xe6808609184e72a0008303000094b0920c523d582040f2bcb1bd7fb1c7c1...
+Tx Hash: 0xaa7f03f9f4e52fcf69f836a6d2bbc7706580adce0a068ff6525ba337218e6992
+Signed Raw Transaction: 0xf866808609184e72a0008303000094b0920c523d582040f2bcb1...
+</pre>
+++++
 
-r 및 s 는 서명 값입니다.
+[[raw_tx_eip155]]
+==== Raw Transaction Creation with EIP-155
 
-K 는 서명자 (EOA 소유자)의 공개 키입니다.
+((("chain identifier")))((("EIP-155 Simple Replay Attack Protection standard")))((("transactions","raw transaction creation with EIP-155")))The EIP-155 "Simple Replay Attack Protection" standard specifies a replay-attack-protected transaction encoding, which includes a _chain identifier_ inside the transaction data, prior to signing. This ensures that transactions created for one blockchain (e.g., the Ethereum main network) are invalid on another blockchain (e.g., Ethereum Classic or the Ropsten test network). Therefore, transactions broadcast on one network cannot be _replayed_ on another, hence the name of the standard.
 
-m 은 서명 된 트랜잭션 데이터입니다.
+EIP-155 adds three fields to the main six fields of the transaction data structure, namely the chain identifier, +0+, and +0+. These three fields are added to the transaction data _before it is encoded and hashed_. They therefore change the transaction's hash, to which the signature is later applied. By including the chain identifier in the data being signed, the transaction signature prevents any changes, as the signature is invalidated if the chain identifier is modified. Therefore, EIP-155 makes it impossible for a transaction to be replayed on another chain, because the signature's validity depends on the chain identifier.
 
-G 는 타원 곡선 생성기 점입니다.
 
-p 는 타원 곡선의 소수 차수입니다.
+The chain identifier field takes a value according to the network the transaction is meant for, as outlined in <<chain_id_table>>.
 
-계산 된 점 Q 의 x 좌표 가 r 과 같으면 검증자는 서명이 유효하다는 결론을 내릴 수 있습니다.
+[[chain_id_table]]
+.Chain identifiers
+[options="header"]
+|======
+| Chain | Chain ID
+| Ethereum mainnet | 1
+| Morden (obsolete), Expanse | 2
+| Ropsten | 3
+| Rinkeby | 4
+| Rootstock mainnet | 30
+| Rootstock testnet | 31
+| Kovan | 42
+| Ethereum Classic mainnet | 61
+| Ethereum Classic testnet | 62
+| Geth private testnets | 1337
+|======
 
-서명을 확인할 때 개인 키는 알려 지거나 공개되지 않습니다.
+The resulting transaction structure is RLP-encoded, hashed, and signed. The signature algorithm is modified slightly to encode the chain identifier in the +v+ prefix too.
 
-팁
-ECDSA는 필연적으로 상당히 복잡한 수학입니다. 전체 설명은이 책의 범위를 벗어납니다. 온라인에서 많은 훌륭한 가이드가 단계별로 안내합니다. "ECDSA 설명"을 검색하거나 http://bit.ly/2r0HhGB를 시도해보세요 .
+For more details, see http://bit.ly/2CQUgne[the EIP-155 specification].(((range="endofrange", startref="ix_06transactions-asciidoc15")))(((range="endofrange", startref="ix_06transactions-asciidoc14")))
 
-실제 거래 서명
-유효한 트랜잭션을 생성하려면 발신자가 타원 곡선 디지털 서명 알고리즘을 사용하여 메시지에 디지털 서명해야합니다. "트랜잭션 서명"이라고하면 실제로 "RLP 직렬화 된 트랜잭션 데이터의 Keccak-256 해시에 서명"을 의미합니다. 서명은 트랜잭션 자체가 아닌 트랜잭션 데이터의 해시에 적용됩니다.
+[[sign_prefix]]
+=== The Signature Prefix Value (v) and Public Key Recovery
 
-Ethereum에서 거래에 서명하려면 발신자는 다음을 수행해야합니다.
+((("digital signatures","signature prefix value (v) and public key recovery")))((("public key recovery")))((("transactions","signature prefix value (v) and public key recovery")))As mentioned in <<tx_struct>>, the transaction message doesn't include a "from" field. That's because the originator's public key can be computed directly from the ECDSA signature. Once you have the public key, you can compute the address easily. The process of recovering the signer's public key is called _public key recovery_.
 
-nonce, gasPrice, gasLimit, to, value, data, chainID, 0, 0의 9 개 필드를 포함하는 트랜잭션 데이터 구조를 만듭니다.
+Given the values +r+ and +s+ that were computed in <<ecdsa_math>>, we can compute two possible public keys.
 
-트랜잭션 데이터 구조의 RLP 인코딩 직렬화 된 메시지를 생성합니다.
+First, we compute two elliptic curve points, _R_ and __R__^__'__^, from the _x_ coordinate +r+ value that is in the signature. There are two points because the elliptic curve is symmetric across the x-axis, so that for any value +x+ there are two possible values that fit the curve, one on each side of the x-axis.
 
-이 직렬화 된 메시지의 Keccak-256 해시를 계산합니다.
+From +r+ we also calculate __r__^-1^, which is the multiplicative inverse of +r+.
 
-원래 EOA의 개인 키로 해시에 서명하여 ECDSA 서명을 계산합니다.
+Finally, we calculate _z_, which is the _n_ lowest bits of the message hash, where _n_ is the order of the elliptic curve.
 
-ECDSA 서명의 계산 된 v, r 및 s 값을 트랜잭션에 추가합니다.
+The two possible public keys are then:
 
-특수 서명 변수 v는 ECDSArecover 기능이 서명을 확인하는 데 도움이되는 체인 ID와 복구 식별자의 두 가지를 나타냅니다. 27 또는 28 중 하나로 계산되거나 체인 ID에 35 또는 36을 더한 두 배로 계산됩니다. 체인 ID에 대한 자세한 내용은 EIP-155를 사용한 원시 트랜잭션 생성을 참조하십시오 . 복구 식별자 ( "이전 스타일"서명에서 27 또는 28 또는 전체 Spurious Dragon 스타일 트랜잭션에서 35 또는 36)는 공개 키의 y 구성 요소 패리티를 나타내는 데 사용됩니다 ( The Signature Prefix Value ( v) 및 공개 키 복구 ).
+++++
+<ul class="simplelist">
+<li><em>K</em><sub>1</sub> = <em>r</em><sup>&#x2013;1</sup> (<em>sR</em> &#x2013; <em>zG</em>)</li>
+</ul>
+++++
 
-노트
-블록 # 2,675,000에서 이더 리움은 "스퓨리어스 드래곤"하드 포크를 구현했으며, 이는 다른 변경 사항 중에서도 트랜잭션 재생 보호 (한 네트워크에서 다른 네트워크에서 재생되는 트랜잭션 방지)를 포함하는 새로운 서명 체계를 도입했습니다. 이 새로운 서명 체계는 EIP-155에 지정되어 있습니다. 이 변경은 트랜잭션의 형식과 서명에 영향을 미치므로 두 가지 형식 중 하나를 취하고 해시되는 트랜잭션 메시지에 포함 된 데이터 필드를 나타내는 세 가지 서명 변수 (즉, v) 중 첫 번째에주의를 기울여야합니다.
+and:
 
-원시 트랜잭션 생성 및 서명
-이 섹션에서는 npm과 함께 설치할 수있는 ethereumjs-tx 라이브러리를 사용하여 원시 트랜잭션을 만들고 서명합니다. 이것은 지갑 내에서 일반적으로 사용되는 기능 또는 사용자를 대신하여 트랜잭션에 서명하는 애플리케이션을 보여줍니다. 이 예제의 소스 코드 는 책의 GitHub 저장소 에있는 raw_tx_demo.js 파일에 있습니다 .
+++++
+<ul class="simplelist">
+<li><em>K</em><sub>2</sub> = <em>r</em><sup>&#x2013;1</sup> (<em>sR</em><sup>'</sup> &#x2013; <em>zG</em>)</li>
+</ul>
+++++
 
-링크 : 코드 / web3js / raw_tx / raw_tx_demo . js []
-예제 코드를 실행하면 다음과 같은 결과가 생성됩니다.
+where:
 
-$ node raw_tx_demo.js
-RLP 인코딩 Tx : 0xe6808609184e72a0008303000094b0920c523d582040f2bcb1bd7fb1c7c1 ...
-Tx 해시 : 0xaa7f03f9f4e52fcf69f836a6d2bbc7706580adce0a068ff6525ba337218e6992
-서명 된 원시 트랜잭션 : 0xf866808609184e72a0008303000094b0920c523d582040f2bcb1 ...
-EIP-155로 원시 트랜잭션 생성
-EIP-155 "Simple Replay Attack Protection"표준은 서명하기 전에 트랜잭션 데이터 내부에 체인 식별자 를 포함하는 재생 공격 보호 트랜잭션 인코딩을 지정합니다 . 이렇게하면 하나의 블록 체인 (예 : 이더 리움 메인 네트워크)에 대해 생성 된 트랜잭션이 다른 블록 체인 (예 : 이더 리움 클래식 또는 Ropsten 테스트 네트워크)에서 무효화됩니다. 따라서 한 네트워크에서 브로드 캐스트 된 트랜잭션은 다른 네트워크에서 재생할 수 없으므로 표준의 이름입니다.
+* __K__~1~ and __K__~2~ are the two possibilities for the signer's public key.
+* __r__^-1^ is the multiplicative inverse of the signature's +r+ value.
+* _s_ is the signature's +s+ value.
+* __R__ and __R__^'^ are the two possibilities for the ephemeral public key _Q_.
+* _z_ is the __n__-lowest bits of the message hash.
+* _G_ is the elliptic curve generator point.
 
-EIP-155는 트랜잭션 데이터 구조의 주요 6 개 필드, 즉 체인 식별자, 0 및 0에 세 개의 필드를 추가합니다.이 세 필드 는 인코딩 및 해시되기 전에 트랜잭션 데이터에 추가됩니다 . 따라서 서명이 나중에 적용되는 트랜잭션의 해시를 변경합니다. 서명되는 데이터에 체인 식별자를 포함함으로써 트랜잭션 서명은 체인 식별자가 수정되면 서명이 무효화되므로 변경을 방지합니다. 따라서 EIP-155는 서명의 유효성이 체인 식별자에 따라 달라지기 때문에 트랜잭션이 다른 체인에서 재생되는 것을 불가능하게합니다.
+To make things more efficient, the transaction signature includes a prefix value +v+, which tells us which of the two possible _R_ values is the ephemeral public key. If +v+ is even, then _R_ is the correct value. If +v+ is odd, then it is __R__^'^. That way, we need to calculate only one value for _R_ and only one value for _K_.
 
-체인 식별자 필드는 체인 식별자에 설명 된대로 트랜잭션이 의미하는 네트워크에 따라 값을 취합니다 .
+[[offline_sign]]
+=== Separating Signing and Transmission (Offline Signing)
 
-표 1. 체인 식별자
-체인	체인 ID
-이더 리움 메인 넷
+((("digital signatures","separating signing and transmission", id="ix_06transactions-asciidoc18", range="startofrange")))((("offline signing", id="ix_06transactions-asciidoc19", range="startofrange")))((("transactions","separating signing and transmission", id="ix_06transactions-asciidoc20", range="startofrange")))Once a transaction is signed, it is ready to transmit to the Ethereum network. The three steps of creating, signing, and broadcasting a transaction normally happen as a single operation, for example using +web3.eth.sendTransaction+. However, as you saw in <<raw_tx>>, you can create and sign the transaction in two separate steps. Once you have a signed transaction, you can then transmit it using +web3.eth.sendSignedTransaction+, which takes a hex-encoded and signed transaction and transmits it on the Ethereum network.
 
-1
+Why would you want to separate the signing and transmission of transactions? The most common reason is security. The computer that signs a transaction must have unlocked private keys loaded in memory. The computer that does the transmitting must be connected to the internet (and be running an Ethereum client). If these two functions are on one computer, then you have private keys on an online system, which is quite dangerous. Separating the functions of signing and transmitting and performing them on different machines (on an offline and an online device, respectively) is called _offline signing_ and is a common security practice.
 
-Morden (구식), Expanse
+<<offline_signing>> shows the process:
 
-2
+1. Create an unsigned transaction on the online computer where the current state of the account, notably the current nonce and funds available, can be retrieved.
+2. Transfer the unsigned transaction to an "air-gapped" offline device for transaction signing, e.g., via a QR code or USB flash drive.
+3. Transmit the signed transaction (back) to an online device for broadcast on the Ethereum blockchain, e.g., via QR code or USB flash drive.
 
-Ropsten
+[[offline_signing]]
+.Offline signing of Ethereum transactions
+image::images/offline_signing.png["Offline signing of Ethereum transactions"]
 
-삼
+Depending on the level of security you need, your "offline signing" computer can have varying degrees of separation from the online computer, ranging from an isolated and firewalled subnet (online but segregated) to a completely offline system known as an _air-gapped_ system. ((("air-gapped system")))In an air-gapped system there is no network connectivity at all&#x2014;the computer is separated from the online environment by a gap of "air." To sign transactions you transfer them to and from the air-gapped computer using data storage media or (better) a webcam and QR code. Of course, this means you must manually transfer every transaction you want signed, and this doesn't scale.
 
-린 케비
+While not many environments can utilize a fully air-gapped system, even a small degree of isolation has significant security benefits. For example, an isolated subnet with a firewall that only allows a message-queue protocol through can offer a much-reduced attack surface and much higher security than signing on the online system. ((("ZeroMQ (0MQ)")))Many companies use a protocol such as ZeroMQ (0MQ) for this purpose. With a setup like that, transactions are serialized and queued for signing. The queuing protocol transmits the serialized message, in a way similar to a TCP socket, to the signing computer. The signing computer reads the serialized transactions from the queue (carefully), applies a signature with the appropriate key, and places them on an outgoing queue. The outgoing queue transmits the signed transactions to a computer with an Ethereum client that dequeues them and transmits them.(((range="endofrange", startref="ix_06transactions-asciidoc20")))(((range="endofrange", startref="ix_06transactions-asciidoc19")))(((range="endofrange", startref="ix_06transactions-asciidoc18")))
 
-4
+[[tx_propagation]]
+=== Transaction Propagation
 
-Rootstock 메인 넷
+((("flood routing")))((("node","transaction propagation")))((("propagation of transactions")))((("transactions","propagation of")))The Ethereum network uses a "flood routing" protocol. Each Ethereum client acts as a _node_ in a _peer-to-peer (P2P)_ network, which (ideally) forms a _mesh_ network. No network node is special: they all act as equal peers. We will use the term "node" to refer to an Ethereum client that is connected to and participates in the P2P network.
 
-30
+Transaction propagation starts with the originating Ethereum node creating (or receiving from offline) a signed transaction. The transaction is validated and then transmitted to all the other Ethereum nodes that are _directly_ connected to the originating node. ((("neighbor nodes")))On average, each Ethereum node maintains connections to at least 13 other nodes, called its _neighbors_. Each neighbor node validates the transaction as soon as they receive it. If they agree that it is valid, they store a copy and propagate it to all their neighbors (except the one it came from). As a result, the transaction ripples outwards from the originating node, _flooding_ across the network, until all nodes in the network have a copy of the transaction. Nodes can filter the messages they propagate, but the default is to propagate all valid transaction messages they receive.
 
-뿌리 줄기 테스트 넷
+Within just a few seconds, an Ethereum transaction propagates to all the Ethereum nodes around the globe. From the perspective of each node, it is not possible to discern the origin of the transaction. The neighbor that sent it to the node may be the originator of the transaction or may have received it from one of its neighbors. To be able to track the origins of transactions, or interfere with propagation, an attacker would have to control a significant percentage of all nodes. This is part of the security and privacy design of P2P networks, especially as applied to blockchain networks.
 
-31
+[[chain_record]]
+=== Recording on the Blockchain
 
-Kovan
+((("blockchain","recording transactions on")))((("miners")))((("mining farms")))((("transactions","recording on the blockchain")))While all the nodes in Ethereum are equal peers, some of them are operated by _miners_ and are feeding transactions and blocks to _mining farms_, which are computers with high-performance graphics processing units (GPUs). The mining computers add transactions to a candidate block and attempt to find a _proof of work_ that makes the candidate block valid. We will discuss this in more detail in <<consensus>>.
 
-42
+Without going into too much detail, valid transactions will eventually be included in a block of transactions and, thus, recorded in the Ethereum blockchain. Once mined into a block, transactions also modify the state of the Ethereum singleton, either by modifying the balance of an account (in the case of a simple payment) or by invoking contracts that change their internal state. These changes are recorded alongside the transaction, in the form of a transaction _receipt_, which may also include _events_. We will examine all this in much more detail in <<evm_chapter>>.
 
-이더 리움 클래식 메인 넷
+A transaction that has completed its journey from creation through signing by an EOA, propagation, and finally mining has changed the state of the singleton and left an indelible mark on the blockchain.
 
-61
+=== Multiple-Signature (Multisig) Transactions
 
-이더 리움 클래식 테스트 넷
+((("multiple-signature (multisig) transactions")))((("transactions","multiple-signature")))If you are familiar with Bitcoin's scripting capabilities, you know that it is possible to create a Bitcoin multisig account which can only spend funds when multiple parties sign the transaction (e.g., 2 of 2 or 3 of 4 signatures). Ethereum's basic EOA value transactions have no provisions for multiple signatures; however, arbitrary signing restrictions can be enforced by smart contracts with any conditions you can think of, to handle the transfer of ether and tokens alike.
 
-62
+To take advantage of this capability, ether has to be transferred to a "wallet contract" that is programmed with the spending rules desired, such as multisignature requirements or spending limits (or combinations of the two). The wallet contract then sends the funds when prompted by an authorized EOA once the spending conditions have been satisfied. For example, to protect your ether under a multisig condition, transfer the ether to a multisig contract. Whenever you want to send funds to another account, all the required users will need to send transactions to the contract using a regular wallet app, effectively authorizing the contract to perform the final pass:[<span class="keep-together">transaction</span>].
 
-Geth 사설 테스트 넷
+These contracts can also be designed to require multiple signatures before executing local code or to trigger other contracts. The security of the scheme is ultimately determined by the multisig contract code.
 
-1337 년
+The ability to implement multisignature transactions as a smart contract demonstrates the flexiblity of Ethereum. However, it is a double-edged sword, as the extra flexibility can lead to bugs that undermine the security of multisignature schemes. There are, in fact, a number of proposals to create a multisignature command in the EVM that removes the need for smart contracts, at least for the simple M-of-N multisignature schemes. This would be equivalent to Bitcoin's multisignature system, which is part of the core consensus rules and has proven to be robust and secure.
 
-결과 트랜잭션 구조는 RLP 인코딩, 해시 및 서명됩니다. 서명 알고리즘은 v 접두사에도 체인 식별자를 인코딩하도록 약간 수정되었습니다.
+=== Conclusions
 
-자세한 내용 은 EIP-155 사양을 참조하십시오 .
-
-서명 접두사 값 (v) 및 공개 키 복구
-The Structure of a Transaction 에서 언급했듯이 트랜잭션 메시지에는 "from"필드가 포함되어 있지 않습니다. 이는 발신자의 공개 키가 ECDSA 서명에서 직접 계산 될 수 있기 때문입니다. 공개 키가 있으면 주소를 쉽게 계산할 수 있습니다. 서명자의 공개 키를 복구하는 프로세스를 공개 키 복구 라고 합니다.
-
-ECDSA Math 에서 계산 된 r 및 s 값이 주어지면 두 개의 가능한 공개 키를 계산할 수 있습니다.
-
-먼저 서명에있는 x 좌표 r 값 에서 두 개의 타원 곡선 점 R 및 R ' 을 계산 합니다. 타원 곡선이 x 축을 가로 질러 대칭이기 때문에 두 개의 점이 있으므로 x 값에 대해 곡선에 맞는 두 개의 가능한 값이 x 축의 각면에 하나씩 있습니다.
-
-r에서 우리는 또한 r 의 곱셈 역인 r -1을 계산 합니다.
-
-마지막으로, 계산 Z 는 IS, n은 상기 메시지의 해시 최하위 비트, 여기서 n은 타원 곡선의 순서이다.
-
-두 가지 가능한 공개 키는 다음과 같습니다.
-
-K 1 = r –1 ( sR – zG )
-과:
-
-K 2 = r –1 ( sR ' – zG )
-어디:
-
-K 1 및 K 2 는 서명자의 공개 키에 대한 두 가지 가능성입니다.
-
-r -1 은 서명 r 값의 곱셈 역입니다.
-
-s 는 서명의 s 값입니다.
-
-R 및 R ' 는 임시 공개 키 Q 의 두 가지 가능성입니다 .
-
-z 는 메시지 해시의 가장 낮은 n 비트입니다.
-
-G 는 타원 곡선 생성기 점입니다.
-
-보다 효율적인 작업을 위해 트랜잭션 서명에는 두 개의 가능한 R 값 중 어느 것이 임시 공개 키인지 알려주는 접두사 값 v가 포함 됩니다. v가 짝수이면 R 이 올바른 값입니다. v가 홀수이면 R ' 입니다. 이렇게하면 R에 대해 하나의 값만 계산 하고 K에 대해 하나의 값만 계산하면됩니다 .
-
-서명과 전송 분리 (오프라인 서명)
-트랜잭션이 서명되면 이더 리움 네트워크로 전송할 준비가 된 것입니다. 트랜잭션을 생성, 서명 및 브로드 캐스팅하는 세 단계는 일반적으로 web3.eth.sendTransaction을 사용하는 것과 같이 단일 작업으로 발생합니다. 그러나 원시 트랜잭션 생성 및 서명 에서 확인 했듯이 두 단계로 트랜잭션을 생성하고 서명 할 수 있습니다. 서명 된 트랜잭션이 있으면 web3.eth.sendSignedTransaction을 사용하여 전송할 수 있습니다.이 트랜잭션은 16 진수로 인코딩되고 서명 된 트랜잭션을 이더 리움 네트워크로 전송합니다.
-
-트랜잭션 서명과 전송을 분리하려는 이유는 무엇입니까? 가장 일반적인 이유는 보안입니다. 트랜잭션에 서명하는 컴퓨터는 잠금 해제 된 개인 키가 메모리에로드되어 있어야합니다. 전송을 수행하는 컴퓨터는 인터넷에 연결되어 있어야하며 이더 리움 클라이언트를 실행해야합니다. 이 두 기능이 한 컴퓨터에 있다면 온라인 시스템에 개인 키가있는 것이므로 매우 위험합니다. 서명 및 전송 기능을 분리하고 서로 다른 시스템 (오프라인 및 온라인 장치에서 각각)에서 수행하는 것을 오프라인 서명 이라고 하며 일반적인 보안 관행입니다.
-
-Ethereum 트랜잭션의 오프라인 서명은 프로세스를 보여줍니다.
-
-계정의 현재 상태, 특히 현재 임시 값 및 사용 가능한 자금을 검색 할 수있는 온라인 컴퓨터에서 서명되지 않은 트랜잭션을 만듭니다.
-
-예를 들어 QR 코드 또는 USB 플래시 드라이브를 통해 트랜잭션 서명을 위해 서명되지 않은 트랜잭션을 "에어 갭"오프라인 장치로 전송합니다.
-
-서명 된 트랜잭션 (뒤로)을 QR 코드 또는 USB 플래시 드라이브를 통해 Ethereum 블록 체인에서 브로드 캐스트하기 위해 온라인 장치로 전송합니다.
-
-이더 리움 거래의 오프라인 서명
-그림 7. 이더 리움 거래의 오프라인 서명
-필요한 보안 수준에 따라 "오프라인 서명"컴퓨터는 격리되고 방화벽이있는 서브넷 (온라인이지만 격리 됨)에서 에어 갭 시스템 으로 알려진 완전히 오프라인 시스템에 이르기까지 온라인 컴퓨터에서 다양한 수준으로 분리 될 수 있습니다. . 에어 갭 시스템에서는 네트워크 연결이 전혀 없습니다. 컴퓨터는 "에어"간격으로 온라인 환경과 분리되어 있습니다. 거래에 서명하려면 데이터 저장 매체 또는 웹캠 및 QR 코드를 사용하여 에어 갭 컴퓨터와 거래를 전송합니다. 물론 이는 서명하려는 모든 트랜잭션을 수동으로 전송해야하며 확장되지 않음을 의미합니다.
-
-많은 환경에서 완전 에어 갭 시스템을 활용할 수있는 것은 아니지만 작은 수준의 격리라도 상당한 보안 이점이 있습니다. 예를 들어, 메시지 큐 프로토콜 만 허용하는 방화벽이있는 격리 된 서브넷은 온라인 시스템에 서명하는 것보다 훨씬 적은 공격 표면과 훨씬 더 높은 보안을 제공 할 수 있습니다. 많은 회사에서 이러한 목적으로 ZeroMQ (0MQ)와 같은 프로토콜을 사용합니다. 이와 같은 설정을 사용하면 트랜잭션이 직렬화되고 서명을 위해 대기열에 추가됩니다. 큐 프로토콜은 TCP 소켓과 유사한 방식으로 직렬화 된 메시지를 서명 컴퓨터로 전송합니다. 서명 컴퓨터는 대기열에서 직렬화 된 트랜잭션을 (주의 깊게) 읽고 적절한 키를 사용하여 서명을 적용한 다음 나가는 대기열에 배치합니다.
-
-트랜잭션 전파
-이더 리움 네트워크는 "플러드 라우팅"프로토콜을 사용합니다. 각 Ethereum 클라이언트는 (이상적으로) 메시 네트워크를 형성하는 P2P (Peer-to-Peer) 네트워크 에서 노드 역할을 합니다. 특별한 네트워크 노드는 없습니다. 모두 동일한 피어 역할을합니다. "노드"라는 용어를 사용하여 P2P 네트워크에 연결되고 참여하는 이더 리움 클라이언트를 가리 킵니다.
-
-트랜잭션 전파는 원래 이더 리움 노드가 서명 된 트랜잭션을 생성 (또는 오프라인에서 수신)하는 것으로 시작됩니다. 트랜잭션은 검증 된 후 원래 노드에 직접 연결된 다른 모든 이더 리움 노드로 전송됩니다 . 평균적으로 각 이더 리움 노드는 인접 노드라고하는 13 개 이상의 다른 노드에 대한 연결을 유지합니다 . 각 인접 노드는 트랜잭션을 수신하는 즉시 유효성을 검사합니다. 그들이 유효하다는 데 동의하면 복사본을 저장하고 모든 이웃에게 전파합니다 (원본을 제외한). 그 결과, 트랜잭션은 원래 노드에서 바깥쪽으로 잔물결 홍수네트워크의 모든 노드가 트랜잭션 사본을 가질 때까지 네트워크를 통해. 노드는 전파하는 메시지를 필터링 할 수 있지만 기본값은 수신하는 모든 유효한 트랜잭션 메시지를 전파하는 것입니다.
-
-단 몇 초 안에 이더 리움 트랜잭션이 전 세계의 모든 이더 리움 노드로 전파됩니다. 각 노드의 관점에서 거래의 출처를 식별하는 것은 불가능합니다. 노드로 전송 한 이웃은 트랜잭션의 발신자이거나 이웃 중 하나로부터 수신했을 수 있습니다. 트랜잭션의 출처를 추적하거나 전파를 방해하려면 공격자가 모든 노드의 상당 부분을 제어해야합니다. 이것은 특히 블록 체인 네트워크에 적용되는 P2P 네트워크의 보안 및 개인 정보 보호 설계의 일부입니다.
-
-블록 체인에 기록
-Ethereum의 모든 노드는 동등한 피어이지만 일부는 채굴 자가 운영하며 고성능 GPU (그래픽 처리 장치)가있는 컴퓨터 인 채굴 농장에 트랜잭션과 블록을 공급합니다 . 마이닝 컴퓨터는 후보 블록에 트랜잭션을 추가 하고 후보 블록을 유효하게 만드는 작업 증명 을 찾으려고 시도 합니다. 이에 대해서는 [consensus] 에서 자세히 설명하겠습니다 .
-
-너무 자세히 설명하지 않으면 유효한 거래는 결국 거래 블록에 포함되어 이더 리움 블록 체인에 기록됩니다. 블록으로 채굴되면 트랜잭션은 계정 잔액을 수정하거나 (단순 결제의 경우) 내부 상태를 변경하는 계약을 호출하여 이더 리움 싱글 톤의 상태도 수정합니다. 이러한 변경 사항은 거래 영수증 형식으로 거래와 함께 기록되며 이벤트 도 포함될 수 있습니다 . 이 모든 것을 [evm_chapter] 에서 더 자세히 살펴볼 것 입니다.
-
-생성부터 EOA 서명, 전파, 그리고 최종적으로 채굴까지 여정을 완료 한 트랜잭션은 싱글 톤의 상태를 변경하고 블록 체인에 지울 수없는 표시를 남겼습니다.
-
-다중 서명 (Multisig) 트랜잭션
-비트 코인의 스크립팅 기능에 익숙하다면 여러 당사자가 거래에 서명 할 때만 자금을 사용할 수있는 비트 코인 다중 서명 계정을 생성 할 수 있다는 것을 알고 있습니다 (예 : 2/2 또는 3/4 서명). Ethereum의 기본 EOA 가치 거래에는 다중 서명에 대한 조항이 없습니다. 그러나 임의의 서명 제한은 이더와 토큰의 전송을 모두 처리하기 위해 생각할 수있는 모든 조건으로 스마트 계약에 의해 시행 될 수 있습니다.
-
-이 기능을 활용하려면 다중 서명 요구 사항이나 지출 한도 (또는이 둘의 조합)와 같은 원하는 지출 규칙으로 프로그래밍 된 "지갑 계약"으로 이더를 전송해야합니다. 지갑 계약은 지출 조건이 충족되면 승인 된 EOA가 요청하면 자금을 보냅니다. 예를 들어 다중 서명 조건에서 에테르를 보호하려면 에테르를 다중 서명 계약으로 전송하십시오. 다른 계정으로 자금을 보내고 싶을 때마다 필요한 모든 사용자는 일반 지갑 앱을 사용하여 계약에 트랜잭션을 보내야하며 계약이 최종 트랜잭션 을 수행하도록 효과적으로 승인해야 합니다 .
-
-이러한 계약은 로컬 코드를 실행하기 전에 여러 서명을 요구하거나 다른 계약을 트리거하도록 설계 할 수도 있습니다. 체계의 보안은 궁극적으로 다중 서명 계약 코드에 의해 결정됩니다.
-
-다중 서명 트랜잭션을 스마트 계약으로 구현하는 기능은 이더 리움의 유연성을 보여줍니다. 그러나 추가적인 유연성으로 인해 다중 서명 체계의 보안을 약화시키는 버그가 발생할 수 있으므로 양날의 검입니다. 사실, 최소한 단순한 M-of-N 다중 서명 체계에 대해서는 스마트 계약의 필요성을 제거하는 EVM에서 다중 서명 명령을 생성하기위한 많은 제안이 있습니다. 이는 핵심 합의 규칙의 일부이며 강력하고 안전한 것으로 입증 된 비트 코인의 다중 서명 시스템과 동일합니다.
-
-결론
-거래는 이더 리움 시스템의 모든 활동의 시작점입니다. 트랜잭션은 이더 리움 가상 머신이 계약을 평가하고 잔액을 업데이트하며보다 일반적으로 이더 리움 블록 체인의 상태를 수정하게하는 "입력"입니다. 다음으로, 스마트 계약을 훨씬 더 자세히 다루고 Solidity 계약 지향 언어로 프로그래밍하는 방법을 배웁니다.
+Transactions are the starting point of every activity in the Ethereum system. Transactions are the "inputs" that cause the Ethereum Virtual Machine to evaluate contracts, update balances, and more generally modify the state of the Ethereum blockchain. Next, we will work with smart contracts in a lot more detail and learn how to program in the Solidity contract-oriented language.(((range="endofrange", startref="ix_06transactions-asciidoc0")))
